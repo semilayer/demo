@@ -21,7 +21,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'https://api.semilayer.com'
 const ORG = process.env.NEXT_PUBLIC_ORG ?? 'demo'
 const PROJECT = process.env.NEXT_PUBLIC_PROJECT ?? 'public'
 const ENV = process.env.NEXT_PUBLIC_ENV ?? 'demo-env'
-const LENS = process.env.NEXT_PUBLIC_LENS ?? 'products'
+const LENS = process.env.NEXT_PUBLIC_LENS ?? 'food_products'
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? ''
 
 const SEARCH_URL = `${API_BASE}/v1/search/${LENS}`
@@ -29,31 +29,32 @@ const QUERY_URL = `${API_BASE}/v1/query/${LENS}`
 
 const PAGE_SIZE = 10
 
-/* ── Shape of a row in the products fixture ─────────────────── */
-interface ProductRow {
+/* ── Shape of a row in the food_products fixture ─────────────── */
+interface FoodRow {
   id: number
-  sku: string
-  title: string
-  description: string
-  category: string
-  inventory: number
-  price_cents: number
+  code: string
+  name: string
+  brand: string | null
+  category: string | null
+  description: string | null
+  quantity: string | null
   tags: string[]
-  created_at: string
-  updated_at: string
+  countries: string[]
+  price_cents: number | null
+  inventory: number | null
 }
 
 interface QueryResponse {
-  rows: ProductRow[]
+  rows: FoodRow[]
   meta: { lens: string; total: number; count: number; durationMs: number }
 }
 
-/* SearchResult shape from the SemiLayer vector store */
+/* SearchResult shape from the SemiLayer response */
 interface SearchHit {
   id: string
   sourceRowId: string
   content: string | null
-  metadata: ProductRow
+  metadata: FoodRow
   score: number
 }
 
@@ -122,14 +123,14 @@ function Hero() {
   return (
     <section className="hero-block">
       <h1 className="hero-title">
-        500 products. <span className="grad">Understood</span>, not just{' '}
-        <span className="grad">stored</span>.
+        1,000,000 food products. <span className="grad">Understood</span>, not
+        just <span className="grad">indexed</span>.
       </h1>
       <p className="hero-sub">
         This page is a single file. Every result you see is a plain{' '}
         <code>fetch()</code> to SemiLayer &mdash; no server of our own, no glue
-        code, no SDK in the way. A <code>products</code> lens was declared once;
-        the layer took care of the rest.
+        code, no SDK in the way. A <code>food_products</code> lens was declared
+        once; the layer took care of the rest.
       </p>
       <div className="hero-callouts">
         <span className="callout"><span className="dot" />Meaning, not keywords</span>
@@ -143,7 +144,7 @@ function Hero() {
 /* ── Search panel ───────────────────────────────────────────── */
 
 function SearchPanel() {
-  const [q, setQ] = useState('headphones')
+  const [q, setQ] = useState('dark chocolate with hazelnuts')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<SearchResponse | null>(null)
@@ -192,7 +193,7 @@ function SearchPanel() {
       >
         <input
           className="search-input"
-          placeholder="Try: 'wireless headphones', 'cozy yoga gear', 'something to cook with'…"
+          placeholder="Try: 'organic oat milk', 'spicy ramen noodles', 'something sweet for breakfast'…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           autoFocus
@@ -232,15 +233,15 @@ function SearchPanel() {
             <article key={hit.id} className="result-card">
               <div className="score-chip">{hit.score.toFixed(2)}</div>
               <div className="result-body">
-                <h3 className="result-title">{md?.title ?? hit.sourceRowId}</h3>
+                <h3 className="result-title">{md?.name ?? hit.sourceRowId}</h3>
                 {md && (
                   <div className="result-meta">
-                    {md.sku && <span>{md.sku}</span>}
+                    {md.brand && <span>{md.brand}</span>}
                     {md.category && <span>{md.category}</span>}
+                    {md.quantity && <span>{md.quantity}</span>}
                     {typeof md.price_cents === 'number' && (
                       <span>${(md.price_cents / 100).toFixed(2)}</span>
                     )}
-                    {typeof md.inventory === 'number' && <span>{md.inventory} in stock</span>}
                   </div>
                 )}
                 {(md?.description || hit.content) && (
@@ -332,11 +333,11 @@ function QueryPanel() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>SKU</th>
-                <th>Title</th>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Brand</th>
                 <th>Category</th>
                 <th>Tags</th>
-                <th style={{ textAlign: 'right' }}>Inventory</th>
                 <th style={{ textAlign: 'right' }}>Price</th>
               </tr>
             </thead>
@@ -344,9 +345,10 @@ function QueryPanel() {
               {data?.rows.map((row) => (
                 <tr key={row.id}>
                   <td className="mono">{row.id}</td>
-                  <td className="mono">{row.sku}</td>
-                  <td className="title">{row.title}</td>
-                  <td>{row.category}</td>
+                  <td className="mono">{row.code}</td>
+                  <td className="title">{row.name}</td>
+                  <td>{row.brand ?? '—'}</td>
+                  <td>{row.category ?? '—'}</td>
                   <td>
                     <div className="tags">
                       {row.tags.slice(0, 4).map((t) => (
@@ -357,8 +359,11 @@ function QueryPanel() {
                       )}
                     </div>
                   </td>
-                  <td className="num">{row.inventory}</td>
-                  <td className="num price">${(row.price_cents / 100).toFixed(2)}</td>
+                  <td className="num price">
+                    {typeof row.price_cents === 'number'
+                      ? `$${(row.price_cents / 100).toFixed(2)}`
+                      : '—'}
+                  </td>
                 </tr>
               ))}
               {!loading && data?.rows.length === 0 && (
