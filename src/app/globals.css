@@ -268,7 +268,12 @@ button {
   font-weight: 700;
 }
 
-.status-pill.timing strong { color: var(--gold); }
+.status-pill.timing {
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+.status-pill.timing strong { color: var(--green); }
 .status-pill.count   strong { color: #c4b5fd; }
 .status-pill.error {
   color: #fca5a5;
@@ -404,11 +409,49 @@ td.title { font-weight: 600; }
 .tag {
   font-size: 0.66rem;
   font-family: var(--mono);
-  padding: 1px 6px;
-  border-radius: 4px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
   background: rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.25);
+  border: 1px solid rgba(139, 92, 246, 0.3);
   color: #c4b5fd;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.tag-purple {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+}
+.tag-blue {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+.tag-green {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+}
+.tag-gold {
+  background: rgba(255, 209, 102, 0.12);
+  border-color: rgba(255, 209, 102, 0.45);
+  color: #fde68a;
+}
+.tag-pink {
+  background: rgba(244, 114, 182, 0.12);
+  border-color: rgba(244, 114, 182, 0.4);
+  color: #fbcfe8;
+}
+.tag-more {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-fade);
+}
+
+.result-tags {
+  margin-top: 0.55rem;
 }
 
 td.num {

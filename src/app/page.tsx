@@ -29,6 +29,25 @@ const QUERY_URL = `${API_BASE}/v1/query/${LENS}`
 
 const PAGE_SIZE = 10
 
+/* ── helpers ────────────────────────────────────────────────── */
+
+function formatSeconds(ms: number): string {
+  if (ms < 1000) return `${Math.max(1, Math.ceil(ms / 100)) / 10}s`
+  return `${Math.ceil(ms / 1000)}s`
+}
+
+const TAG_PALETTE = ['purple', 'blue', 'green', 'gold', 'pink'] as const
+
+function tagColor(tag: string): (typeof TAG_PALETTE)[number] {
+  let h = 0
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) | 0
+  return TAG_PALETTE[Math.abs(h) % TAG_PALETTE.length]!
+}
+
+function prettyTag(tag: string): string {
+  return tag.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 /* ── Shape of a row in the food_products fixture ─────────────── */
 interface FoodRow {
   id: number
@@ -207,12 +226,12 @@ function SearchPanel() {
         {loading && <span className="spinner" />}
         {elapsed != null && (
           <span className="status-pill timing">
-            Round-trip <strong>{elapsed} ms</strong>
+            Round-trip <strong>{formatSeconds(elapsed)}</strong>
           </span>
         )}
         {data && (
           <span className="status-pill timing">
-            Server <strong>{data.meta.durationMs} ms</strong>
+            Server <strong>{formatSeconds(data.meta.durationMs)}</strong>
           </span>
         )}
         {data && (
@@ -246,6 +265,18 @@ function SearchPanel() {
                 )}
                 {(md?.description || hit.content) && (
                   <p className="result-desc">{md?.description ?? hit.content}</p>
+                )}
+                {md?.tags && md.tags.length > 0 && (
+                  <div className="tags result-tags">
+                    {md.tags.slice(0, 6).map((t) => (
+                      <span key={t} className={`tag tag-${tagColor(t)}`}>
+                        {prettyTag(t)}
+                      </span>
+                    ))}
+                    {md.tags.length > 6 && (
+                      <span className="tag tag-more">+{md.tags.length - 6}</span>
+                    )}
+                  </div>
                 )}
               </div>
             </article>
@@ -311,12 +342,12 @@ function QueryPanel() {
         {loading && <span className="spinner" />}
         {elapsed != null && (
           <span className="status-pill timing">
-            Round-trip <strong>{elapsed} ms</strong>
+            Round-trip <strong>{formatSeconds(elapsed)}</strong>
           </span>
         )}
         {data && (
           <span className="status-pill timing">
-            Server <strong>{data.meta.durationMs} ms</strong>
+            Server <strong>{formatSeconds(data.meta.durationMs)}</strong>
           </span>
         )}
         {data && (
@@ -352,10 +383,12 @@ function QueryPanel() {
                   <td>
                     <div className="tags">
                       {row.tags.slice(0, 4).map((t) => (
-                        <span className="tag" key={t}>{t}</span>
+                        <span key={t} className={`tag tag-${tagColor(t)}`}>
+                          {prettyTag(t)}
+                        </span>
                       ))}
                       {row.tags.length > 4 && (
-                        <span className="tag">+{row.tags.length - 4}</span>
+                        <span className="tag tag-more">+{row.tags.length - 4}</span>
                       )}
                     </div>
                   </td>
