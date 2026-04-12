@@ -138,12 +138,31 @@ function Header() {
   )
 }
 
+function useCountUp(target: number, durationMs = 2400) {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    let raf = 0
+    const start = performance.now()
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs)
+      setValue(Math.round(easeOutCubic(t) * target))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, durationMs])
+  return value
+}
+
 function Hero() {
+  const count = useCountUp(1_000_000, 2600)
   return (
     <section className="hero-block">
       <h1 className="hero-title">
-        1,000,000 food products. <span className="grad">Understood</span>, not
-        just <span className="grad">indexed</span>.
+        <span className="count-up">{count.toLocaleString()}</span> food products.{' '}
+        <span className="grad">Understood</span>, not just{' '}
+        <span className="grad">indexed</span>.
       </h1>
       <p className="hero-sub">
         This page is a single file. Every result you see is a plain{' '}
