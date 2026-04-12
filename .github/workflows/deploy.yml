@@ -1,0 +1,98 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  GCP_PROJECT: semilayer
+  GCP_REGION: us-east1
+  URL_MAP: semilayer-prod-static-sites
+
+jobs:
+  deploy:
+    name: Build & deploy demo (demo.semilayer.com)
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (static export)
+        run: pnpm build
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve demo bucket name
+        id: resolve
+        run: |
+          BUCKET=$(gcloud storage buckets list \
+            --project="$GCP_PROJECT" \
+            --filter="name:semilayer-prod-demo-" \
+            --format="value(name)" | head -1)
+          if [ -z "$BUCKET" ]; then
+            echo "Failed to resolve demo bucket"
+            exit 1
+          fi
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+
+      - name: Sync out/ to GCS
+        env:
+          BUCKET: ${{ steps.resolve.outputs.bucket }}
+        run: |
+          gcloud storage rsync out "gs://${BUCKET}" \
+            --recursive \
+            --delete-unmatched-destination-objects \
+            --cache-control="public, max-age=0, must-revalidate"
+          # Long cache for hashed static assets
+          if gcloud storage ls "gs://${BUCKET}/_next/static/" > /dev/null 2>&1; then
+            gcloud storage objects update "gs://${BUCKET}/_next/static/**" \
+              --cache-control="public, max-age=31536000, immutable" || true
+          fi
+
+      - name: Invalidate Cloud CDN (demo path)
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache "$URL_MAP" \
+            --path="/*" \
+            --host="demo.semilayer.com" \
+            --global \
+            --async
+
+      - name: Smoke test demo.semilayer.com
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsSI https://demo.semilayer.com/ | grep -q "200"; then
+              echo "demo.semilayer.com is serving 200"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "demo.semilayer.com smoke test failed"
+          exit 1

@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+*.log
+.DS_Store
+.env.local
+.env.*.local
+# .env IS committed — see README. It only contains a publishable pk_ key.
+next-env.d.ts
+.idea
+.vscode
