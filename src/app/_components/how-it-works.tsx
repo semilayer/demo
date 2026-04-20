@@ -5,7 +5,7 @@ Authorization: Bearer pk_...
 Content-Type: application/json
 
 {
-  "query": "headphones",
+  "query": "dark chocolate with hazelnuts",
   "limit": 20
 }`
 
@@ -14,9 +14,9 @@ Authorization: Bearer pk_...
 Content-Type: application/json
 
 {
-  "limit": 10,
-  "offset": 0,
-  "orderBy": { "field": "id", "dir": "asc" }
+  "where": { "brand": "Meijer", "price_cents": { "$lt": 500 } },
+  "orderBy": { "field": "price_cents", "dir": "asc" },
+  "limit": 10
 }`
 
 const FEED_SNIPPET = `POST ${API_BASE}/v1/feed/${LENS}/discover
@@ -37,19 +37,22 @@ Content-Type: application/json
   "limit": 12
 }`
 
-const CONFIG_SNIPPET = `// one lens. that's the whole config.
+const CONFIG_SNIPPET = `// one lens, every surface on this page.
 food_products: {
   facets: {
-    search: { mode: 'semantic' },
-    query:  true,
+    search:  { fields: ['name', 'description', 'brand', 'tags'] },
+    similar: { fields: ['name', 'description', 'brand', 'tags'] },
     feed: {
-      discover: { /* see /feeds docs */ },
+      discover:  { /* similarity + recency */ },
+      latest:    { /* pure recency */ },
+      relatedTo: { /* recordVector seed */ },
     },
   },
   rules: {
-    search: 'public',
-    query:  'public',
-    feed:   { discover: 'public' },
+    query:   'public',
+    search:  'public',
+    similar: 'public',
+    feed:    { discover: 'public', latest: 'public', relatedTo: 'public' },
   },
 }`
 
