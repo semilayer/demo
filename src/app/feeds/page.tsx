@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { SiteHeader } from '../_components/header'
+import { BottomNote } from '../_components/bottom-note'
 import {
   fetchFeedPage,
   displayTitle,
@@ -11,21 +13,14 @@ import {
   type FeedPage,
 } from './lib/feed-api'
 import { useLikes } from './lib/liked-storage'
+import { cardGradient, contentTone } from './lib/card-gradient'
 
 /* ─────────────────────────────────────────────────────────────
  * SemiLayer · Feed demo (/feeds)
  * ─────────────────────────────────────────────────────────────
- * Three named feeds on one lens:
- *
- *   POST /v1/feed/<LENS>/discover    ← similarity (+ recency / engagement)
- *   POST /v1/feed/<LENS>/latest      ← chronological
- *   (POST /v1/feed/<LENS>/relatedTo → /feeds/[id] detail page)
- *
- * Likes live in localStorage only. `context.liked_names` drives the
- * similarity scorer in `discover`; the frontend never hits our API or
- * our database to persist a like. If the feed's engagement scorer
- * points at a sibling lens with server-seeded data, that axis evolves
- * for every visitor — they're complementary, not overlapping.
+ * Three named feeds on one lens — Discover (similarity+recency),
+ * Latest (recency), and relatedTo (recordVector, opened on
+ * /feeds/detail?id=X). Likes are localStorage-only.
  * ───────────────────────────────────────────────────────────── */
 
 type FeedName = 'discover' | 'latest'
@@ -34,21 +29,25 @@ export default function FeedsHome() {
   const [active, setActive] = useState<FeedName>('discover')
   const likes = useLikes()
 
-  // Discover evolves with the user's client-side likes. Pass them both
-  // as names (for text-embedding similarity) and ids (so a feed config
-  // that wanted to boost-by-id could do so).
   const context = useMemo(
     () => ({ liked_names: likes.likedTitles, liked_ids: likes.likedIds }),
     [likes.likedTitles, likes.likedIds],
   )
 
   return (
-    <main className="feed-page">
-      <Header likedCount={likes.liked.length} onClear={likes.clear} />
+    <main className="shell feeds-shell">
+      <SiteHeader />
 
-      <div className="feed-tabs">
-        <TabButton label="Discover" active={active === 'discover'} onClick={() => setActive('discover')} />
-        <TabButton label="Latest" active={active === 'latest'} onClick={() => setActive('latest')} />
+      <FeedsHero likedCount={likes.liked.length} />
+
+      <div className="feeds-tabs">
+        <TabButton label="Discover" hint="similarity + recency" active={active === 'discover'} onClick={() => setActive('discover')} />
+        <TabButton label="Latest" hint="pure recency" active={active === 'latest'} onClick={() => setActive('latest')} />
+        {likes.liked.length > 0 && (
+          <button type="button" className="clear-btn" onClick={likes.clear}>
+            clear {likes.liked.length} {likes.liked.length === 1 ? 'like' : 'likes'}
+          </button>
+        )}
       </div>
 
       <FeedList
@@ -60,94 +59,102 @@ export default function FeedsHome() {
 
       <Explainer feedName={active} likedCount={likes.liked.length} />
 
+      <BottomNote />
+
       <style jsx>{`
-        .feed-page {
-          max-width: 920px;
-          margin: 0 auto;
-          padding: 32px 20px 96px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          color: #1a1a1a;
+        .feeds-shell {
+          max-width: 1280px;
         }
-        .feed-tabs {
+        .feeds-tabs {
           display: flex;
-          gap: 8px;
-          border-bottom: 1px solid #e5e5e5;
-          margin-bottom: 16px;
+          gap: 0.5rem;
+          align-items: center;
+          border-bottom: 1px solid var(--border);
+          margin: 1.5rem 0 1rem;
+          padding-bottom: 0;
+          flex-wrap: wrap;
+        }
+        .clear-btn {
+          margin-left: auto;
+          font-size: 0.72rem;
+          color: var(--text-fade);
+          background: none;
+          border: 0;
+          padding: 0.5rem 0.85rem;
+          cursor: pointer;
+        }
+        .clear-btn:hover {
+          color: var(--pink);
         }
       `}</style>
     </main>
   )
 }
 
-/* ─── Header ─────────────────────────────────────────────── */
+/* ─── Hero ────────────────────────────────────────────────── */
 
-function Header({ likedCount, onClear }: { likedCount: number; onClear: () => void }) {
+function FeedsHero({ likedCount }: { likedCount: number }) {
   return (
-    <header className="header">
-      <div>
-        <h1>SemiLayer Feeds</h1>
-        <p className="sub">
-          Three feeds, one lens. Like something to watch the <strong>Discover</strong> tab
-          re-rank around your taste. Click any card for &ldquo;More like this.&rdquo; All your
-          likes live in this browser — nothing is sent to a server.
-        </p>
-      </div>
-      <div className="likes-chip">
-        <span>{likedCount} liked</span>
-        {likedCount > 0 && (
-          <button type="button" className="link" onClick={onClear}>
-            clear
-          </button>
-        )}
-      </div>
+    <section className="feeds-hero">
+      <h1>
+        Three feeds. <span className="grad">One lens.</span> No backend.
+      </h1>
+      <p>
+        Each feed is a config block — <code>similarity</code>, <code>recency</code>,
+        <code>engagement</code>, <code>diversity</code> — composed declaratively and
+        served by one endpoint. Click a card to see its{' '}
+        <strong>&ldquo;more like this&rdquo;</strong> relatives; like items to shift the
+        <em> shape</em> of your feed.
+      </p>
+      {likedCount > 0 && (
+        <div className="hero-badge">
+          ♥ {likedCount} liked &mdash; sent on every{' '}
+          <code>discover</code> call
+        </div>
+      )}
       <style jsx>{`
-        .header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
-          gap: 16px;
+        .feeds-hero {
+          padding: 1.4rem 0 0.4rem;
         }
         h1 {
-          margin: 0 0 6px;
-          font-size: 28px;
-          background: linear-gradient(90deg, #8b5cf6, #3b82f6, #10b981);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
+          font-size: clamp(1.6rem, 3vw, 2.3rem);
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          margin: 0 0 0.4rem;
         }
-        .sub {
+        p {
+          color: var(--text-dim);
+          font-size: 0.95rem;
+          line-height: 1.6;
+          max-width: 780px;
           margin: 0;
-          font-size: 14px;
-          color: #666;
-          max-width: 620px;
-          line-height: 1.45;
         }
-        .likes-chip {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 6px 12px;
-          border: 1px solid #e5e5e5;
+        p code {
+          background: var(--panel);
+          border: 1px solid var(--border);
+          padding: 1px 7px;
+          border-radius: 5px;
+          font-size: 0.82rem;
+          color: var(--text);
+          margin: 0 2px;
+        }
+        .hero-badge {
+          display: inline-flex;
+          margin-top: 1rem;
+          padding: 0.35rem 0.8rem;
+          background: rgba(244, 114, 182, 0.12);
+          border: 1px solid rgba(244, 114, 182, 0.4);
           border-radius: 999px;
-          font-size: 13px;
-          color: #4a4a4a;
-          background: #fafafa;
-          white-space: nowrap;
+          font-size: 0.8rem;
+          color: #fbcfe8;
         }
-        .link {
-          background: none;
+        .hero-badge code {
+          background: rgba(255, 255, 255, 0.08);
           border: 0;
-          color: #8b5cf6;
-          font-size: 12px;
-          cursor: pointer;
-          padding: 0;
-        }
-        .link:hover {
-          text-decoration: underline;
+          padding: 0 4px;
         }
       `}</style>
-    </header>
+    </section>
   )
 }
 
@@ -155,31 +162,46 @@ function Header({ likedCount, onClear }: { likedCount: number; onClear: () => vo
 
 function TabButton({
   label,
+  hint,
   active,
   onClick,
 }: {
   label: string
+  hint: string
   active: boolean
   onClick: () => void
 }) {
   return (
     <button type="button" className={active ? 'tab active' : 'tab'} onClick={onClick}>
-      {label}
+      <span className="label">{label}</span>
+      <span className="hint">{hint}</span>
       <style jsx>{`
         .tab {
-          padding: 8px 18px;
+          padding: 0.6rem 1rem 0.85rem;
           background: none;
           border: 0;
-          font-size: 14px;
-          color: #666;
-          cursor: pointer;
           border-bottom: 2px solid transparent;
           margin-bottom: -1px;
+          color: var(--text-dim);
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 2px;
         }
         .tab.active {
-          color: #1a1a1a;
-          border-bottom-color: #8b5cf6;
+          color: var(--text);
+          border-bottom-color: var(--purple);
+        }
+        .label {
+          font-size: 0.95rem;
           font-weight: 600;
+        }
+        .hint {
+          font-size: 0.7rem;
+          color: var(--text-fade);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
         }
       `}</style>
     </button>
@@ -224,10 +246,6 @@ function FeedList({
     [feedName, context],
   )
 
-  // Refetch first page when the feed tab changes OR when likes change
-  // (Discover ranks against `context.liked_names`, so a new like literally
-  // evolves the feed on the next call). Latest ignores context so it only
-  // reloads on tab switch.
   const contextKey = useMemo(() => JSON.stringify(context ?? null), [context])
   useEffect(() => {
     void load(null, true)
@@ -235,7 +253,7 @@ function FeedList({
 
   return (
     <section>
-      <div className="feed-list">
+      <div className="feed-grid">
         {items.map((item) => (
           <ItemCard
             key={`${feedName}-${item.sourceRowId}`}
@@ -265,61 +283,60 @@ function FeedList({
       )}
 
       <style jsx>{`
-        .feed-list {
+        .feed-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 14px;
-          margin-top: 16px;
-        }
-        @media (max-width: 720px) {
-          .feed-list {
-            grid-template-columns: 1fr;
-          }
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 0.9rem;
+          margin-top: 1rem;
         }
         .load-more-wrap {
           display: flex;
           justify-content: center;
-          margin-top: 20px;
+          margin-top: 1.5rem;
         }
         .load-more {
-          padding: 10px 20px;
-          background: #fff;
-          border: 1px solid #e5e5e5;
-          border-radius: 8px;
-          font-size: 14px;
+          padding: 0.6rem 1.3rem;
+          background: var(--panel);
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          font-size: 0.85rem;
           cursor: pointer;
+          color: var(--text);
+          transition: all 150ms;
         }
         .load-more:hover {
-          border-color: #8b5cf6;
-          color: #8b5cf6;
+          border-color: rgba(139, 92, 246, 0.6);
+          background: var(--panel-2);
         }
         .hint {
           text-align: center;
-          color: #999;
-          font-size: 13px;
-          margin: 18px 0;
+          color: var(--text-fade);
+          font-size: 0.82rem;
+          margin: 1.2rem 0;
         }
         .error {
-          background: #fee;
-          color: #c33;
-          padding: 10px 14px;
-          border-radius: 8px;
-          margin-top: 12px;
-          font-size: 13px;
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          color: #fca5a5;
+          padding: 0.7rem 1rem;
+          border-radius: 10px;
+          margin-top: 0.8rem;
+          font-size: 0.85rem;
         }
         .meta {
-          color: #999;
-          font-size: 11px;
+          color: var(--text-fade);
+          font-size: 0.7rem;
           text-align: center;
-          margin-top: 20px;
-          font-family: ui-monospace, SFMono-Regular, monospace;
+          margin-top: 1.2rem;
+          font-family: var(--mono);
+          letter-spacing: 0.05em;
         }
       `}</style>
     </section>
   )
 }
 
-/* ─── Item card (metadata-shape-agnostic) ────────────────── */
+/* ─── Item card (rainbow gradient + click affordance) ─────── */
 
 function ItemCard({
   item,
@@ -335,93 +352,127 @@ function ItemCard({
   const subtitle = displaySubtitle(m)
   const chips = displayChips(m)
   const desc = typeof m.description === 'string' ? m.description : null
+  const gradient = cardGradient(String(m.id), item.score)
+  const tone = contentTone(item.score)
 
   return (
-    <article className="card">
-      <div className="rank-chip">#{item.rank}</div>
-      <Link href={`/feeds/${encodeURIComponent(String(m.id))}`} className="title">
-        {title}
-      </Link>
-      {subtitle && <div className="subtitle">{subtitle}</div>}
-      {chips.length > 0 && (
-        <div className="meta-row">
-          {chips.map((c, i) => (
-            <span key={i} className="tag">
-              {c}
-            </span>
-          ))}
+    <Link
+      href={`/feeds/detail?id=${encodeURIComponent(String(m.id))}`}
+      className="card"
+      style={{ backgroundImage: gradient }}
+    >
+      <div className="card-inner">
+        <div className="top-row">
+          <span className="rank">#{item.rank}</span>
+          <span className="score" title="feed score (higher = better fit)">
+            {item.score.toFixed(4)}
+          </span>
         </div>
-      )}
-      {desc && <p className="desc">{desc}</p>}
-      <div className="actions">
-        <button
-          type="button"
-          className={isLiked ? 'like-btn liked' : 'like-btn'}
-          onClick={onToggleLike}
-          aria-label={isLiked ? 'Unlike' : 'Like'}
-        >
-          {isLiked ? '♥ liked' : '♡ like'}
-        </button>
-        <span className="score">score {item.score.toFixed(3)}</span>
+        <div className="title" style={{ color: tone.title }}>
+          {title}
+        </div>
+        {subtitle && (
+          <div className="subtitle" style={{ color: tone.subtitle }}>
+            {subtitle}
+          </div>
+        )}
+        {chips.length > 0 && (
+          <div className="chips">
+            {chips.slice(0, 4).map((c, i) => (
+              <span key={i} className="tag">
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+        {desc && (
+          <p className="desc" style={{ color: tone.subtitle }}>
+            {desc}
+          </p>
+        )}
+        <div className="actions">
+          <button
+            type="button"
+            className={isLiked ? 'like-btn liked' : 'like-btn'}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onToggleLike()
+            }}
+            aria-label={isLiked ? 'Unlike' : 'Like'}
+          >
+            {isLiked ? '♥ liked' : '♡ like'}
+          </button>
+          <span className="chase">View similar →</span>
+        </div>
       </div>
 
       <style jsx>{`
         .card {
-          position: relative;
-          padding: 14px 16px 12px;
-          border: 1px solid #eee;
-          border-radius: 10px;
-          background: #fff;
-          transition: border-color 120ms;
+          display: block;
+          padding: 1.5px;
+          border-radius: 14px;
+          text-decoration: none;
+          transition: transform 160ms, box-shadow 160ms;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
         }
         .card:hover {
-          border-color: #d4d4d4;
+          transform: translateY(-3px);
+          box-shadow: 0 12px 34px rgba(139, 92, 246, 0.28);
         }
-        .rank-chip {
-          position: absolute;
-          top: 10px;
-          right: 12px;
-          font-size: 11px;
-          color: #999;
-          font-family: ui-monospace, monospace;
+        .card-inner {
+          padding: 0.9rem 1.1rem 0.85rem;
+          border-radius: 12.5px;
+          background: rgba(15, 16, 36, 0.72);
+          backdrop-filter: blur(12px);
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+          min-height: 210px;
+        }
+        .top-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-family: var(--mono);
+          font-size: 0.72rem;
+        }
+        .rank {
+          color: rgba(255, 255, 255, 0.55);
+        }
+        .score {
+          color: rgba(255, 255, 255, 0.55);
         }
         .title {
-          display: inline-block;
-          font-weight: 600;
-          font-size: 15px;
-          color: #1a1a1a;
-          text-decoration: none;
-          line-height: 1.25;
-          margin-right: 40px;
-        }
-        .title:hover {
-          color: #8b5cf6;
+          font-weight: 700;
+          font-size: 1rem;
+          line-height: 1.3;
+          letter-spacing: -0.01em;
         }
         .subtitle {
-          font-size: 12px;
-          color: #888;
-          margin-top: 2px;
+          font-size: 0.78rem;
           text-transform: capitalize;
+          font-weight: 500;
         }
-        .meta-row {
+        .chips {
           display: flex;
-          gap: 6px;
-          margin: 8px 0;
+          gap: 0.3rem;
           flex-wrap: wrap;
+          margin-top: 0.1rem;
         }
         .tag {
-          font-size: 11px;
+          font-size: 0.7rem;
           text-transform: capitalize;
-          padding: 2px 8px;
-          background: #f3e8ff;
-          color: #6d28d9;
+          padding: 2px 9px;
+          background: rgba(255, 255, 255, 0.08);
+          color: rgba(255, 255, 255, 0.85);
           border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.14);
         }
         .desc {
-          font-size: 13px;
-          color: #666;
-          line-height: 1.4;
-          margin: 4px 0 10px;
+          font-size: 0.78rem;
+          line-height: 1.45;
+          margin: 0.1rem 0 0;
           display: -webkit-box;
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
@@ -431,33 +482,39 @@ function ItemCard({
           display: flex;
           align-items: center;
           justify-content: space-between;
+          margin-top: auto;
+          padding-top: 0.6rem;
         }
         .like-btn {
-          background: none;
-          border: 1px solid #e5e5e5;
-          font-size: 12px;
-          padding: 4px 10px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          font-size: 0.75rem;
+          padding: 0.3rem 0.75rem;
           border-radius: 999px;
           cursor: pointer;
-          color: #666;
-          transition: all 120ms;
+          color: rgba(255, 255, 255, 0.9);
+          transition: all 150ms;
         }
         .like-btn:hover {
-          border-color: #ec4899;
-          color: #ec4899;
+          border-color: #f472b6;
+          color: #fbcfe8;
         }
         .like-btn.liked {
-          background: #fce7f3;
-          border-color: #ec4899;
-          color: #be185d;
+          background: rgba(244, 114, 182, 0.2);
+          border-color: #f472b6;
+          color: #fbcfe8;
         }
-        .score {
-          font-size: 11px;
-          color: #ccc;
-          font-family: ui-monospace, monospace;
+        .chase {
+          font-size: 0.78rem;
+          color: rgba(255, 255, 255, 0.78);
+          font-weight: 700;
+          letter-spacing: 0.01em;
+        }
+        .card:hover .chase {
+          color: #fff;
         }
       `}</style>
-    </article>
+    </Link>
   )
 }
 
@@ -468,50 +525,112 @@ function Explainer({ feedName, likedCount }: { feedName: FeedName; likedCount: n
     <section className="explainer">
       <h3>What&apos;s happening?</h3>
       {feedName === 'discover' ? (
-        <p>
-          Discover ranks candidates by similarity × recency (plus engagement if your feed
-          config points at a sibling lens). The similarity vector is built from your{' '}
-          {likedCount > 0 ? (
-            <>
-              <strong>{likedCount}</strong> liked titles (sent as <code>context.liked_names</code>)
-            </>
-          ) : (
-            <>an empty context — like a few items and watch the order shift</>
-          )}
-          . Every like stays in <code>localStorage</code> — no writes to our server.
-        </p>
+        <div className="grid">
+          <div>
+            <h4>Your likes don&apos;t pin to the top</h4>
+            <p>
+              Liking doesn&apos;t move liked items up &mdash; it shifts the{' '}
+              <em>direction</em> the feed leans. Each like adds to{' '}
+              <code>context.liked_names</code>; on the next page-load the server builds a
+              context vector from that list and ranks candidates by{' '}
+              <strong>cosine similarity to that vector</strong>. Items semantically
+              close to your taste float up.{' '}
+              {likedCount === 0 ? (
+                <>
+                  You haven&apos;t liked anything yet, so <code>context</code> is empty
+                  &mdash; everything scores equally on similarity and the rank falls
+                  through to pure recency (weight 0.1).
+                </>
+              ) : (
+                <>
+                  You&apos;ve liked <strong>{likedCount}</strong> item{likedCount === 1 ? '' : 's'}
+                  ; the next fetch ranks against the centroid of their embeddings.
+                </>
+              )}
+            </p>
+          </div>
+          <div>
+            <h4>Why this page&apos;s scores look so close</h4>
+            <p>
+              The demo dataset has no engagement lens attached, and{' '}
+              <code>similarity</code> is 0 without context. That leaves only{' '}
+              <code>recency (weight 0.1)</code>, and every product in the seed shares an
+              <code>updated_at</code> timestamp &mdash; so recency gives the same
+              contribution to every row. Like a few items and watch the similarity axis
+              wake up &mdash; the scores will fan out.
+            </p>
+          </div>
+          <div>
+            <h4>Try this</h4>
+            <p>
+              Hop to <strong>Latest</strong>, like a few obviously related products
+              (e.g. two different olive oils). Come back to Discover. The top rows
+              should now lean toward olive oils &mdash; the exact ones you liked
+              might or might not be at #1, because similarity ranks{' '}
+              <em>neighbors</em> in embedding space, not the originals.
+            </p>
+          </div>
+        </div>
       ) : (
-        <p>
-          Latest is chronological: <code>ORDER BY updated_at DESC</code> over the most recent
-          candidates, ranked purely by recency. No personalization — same for every visitor.
-        </p>
+        <div className="grid">
+          <div>
+            <h4>Pure chronological</h4>
+            <p>
+              <code>candidates.from: &apos;recent&apos;</code> pulls the 100 most-recently
+              updated rows. <code>rank.recency</code> at weight 1 with{' '}
+              <code>halfLife: 7d</code> orders them by freshness. No context, no
+              personalization &mdash; same feed for every visitor.
+            </p>
+          </div>
+          <div>
+            <h4>Still powered by likes</h4>
+            <p>
+              Liking here doesn&apos;t change Latest &mdash; but those likes{' '}
+              <em>do</em> follow you to <strong>Discover</strong>. Use Latest as a
+              browse surface, tap likes, then jump to Discover to see them reflected.
+            </p>
+          </div>
+        </div>
       )}
       <style jsx>{`
         .explainer {
-          margin-top: 32px;
-          padding: 14px 18px;
-          background: #fafafa;
-          border-radius: 10px;
-          border: 1px solid #f0f0f0;
+          margin-top: 2rem;
+          padding: 1.2rem 1.4rem;
+          background: var(--panel);
+          border: 1px solid var(--border);
+          border-radius: 12px;
         }
         h3 {
-          margin: 0 0 6px;
-          font-size: 14px;
-          color: #333;
+          margin: 0 0 0.8rem;
+          font-size: 0.95rem;
+          color: var(--text);
+          font-weight: 700;
+        }
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 1rem;
+        }
+        h4 {
+          margin: 0 0 0.3rem;
+          font-size: 0.85rem;
+          color: var(--text);
+          font-weight: 600;
         }
         p {
           margin: 0;
-          font-size: 13px;
-          color: #555;
-          line-height: 1.55;
+          color: var(--text-dim);
+          font-size: 0.82rem;
+          line-height: 1.6;
         }
         code {
-          font-family: ui-monospace, monospace;
-          font-size: 12px;
-          background: #eee;
+          background: var(--bg);
+          border: 1px solid var(--border);
           padding: 1px 5px;
-          border-radius: 3px;
-          color: #1a1a1a;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          color: var(--text);
+          font-family: var(--mono);
         }
       `}</style>
     </section>
