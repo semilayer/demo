@@ -14,12 +14,21 @@ import {
 import { cardGradient, contentTone } from '../feeds/lib/card-gradient'
 
 const DEFAULT_QUERY = 'dark chocolate with hazelnuts'
+// Suggestions tuned to what the dataset *actually* contains right now —
+// a US-grocery catalog (Meijer, H-E-B, Markets of Meijer, Roland, Via
+// Roma, Mrs. Renfro's, etc.). The ingest is still rolling in more rows;
+// until it finishes, "spicy ramen noodles" or "organic oat milk" won't
+// necessarily land. These prompts will.
 const PROMPT_SUGGESTIONS = [
-  'organic oat milk',
-  'spicy ramen noodles',
-  'something sweet for breakfast',
-  'gluten free pasta',
-  'smoky chipotle sauce',
+  'mashed potatoes with garlic',
+  'chocolate chip cookies',
+  'pasta sauce with tomatoes',
+  'cheddar cheese blend',
+  'pumpkin muffins',
+  'sparkling citrus drink',
+  'everything bagel',
+  'maple sausage links',
+  'salsa with chipotle',
 ]
 
 export function SearchPanel({ initialQuery = DEFAULT_QUERY }: { initialQuery?: string }) {
@@ -103,6 +112,12 @@ export function SearchPanel({ initialQuery = DEFAULT_QUERY }: { initialQuery?: s
           </button>
         ))}
       </div>
+      <p className="indexing-note">
+        <span className="dot" /> Ingest is still rolling in new rows — the
+        dataset today leans heavily US-grocery (Meijer, H-E-B, Markets of
+        Meijer, Roland, Via Roma). Suggestions above are tuned to what&apos;s
+        currently indexed; try them for a feel, then type your own.
+      </p>
 
       <div className="status-row">
         {loading && <span className="spinner" />}
@@ -174,6 +189,39 @@ export function SearchPanel({ initialQuery = DEFAULT_QUERY }: { initialQuery?: s
         .suggest-chip:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+        .indexing-note {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.55rem;
+          margin: 0 0 1rem;
+          padding: 0.55rem 0.8rem;
+          background: rgba(139, 92, 246, 0.08);
+          border: 1px solid rgba(139, 92, 246, 0.25);
+          border-radius: 10px;
+          color: var(--text-dim);
+          font-size: 0.75rem;
+          line-height: 1.5;
+        }
+        .indexing-note .dot {
+          display: inline-block;
+          width: 7px;
+          height: 7px;
+          margin-top: 0.35rem;
+          border-radius: 999px;
+          background: #f472b6;
+          flex-shrink: 0;
+          box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.7);
+          animation: pulse 1.6s ease-in-out infinite;
+        }
+        @keyframes pulse {
+          0%,
+          100% {
+            box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.6);
+          }
+          50% {
+            box-shadow: 0 0 0 6px rgba(244, 114, 182, 0);
+          }
         }
       `}</style>
     </section>
