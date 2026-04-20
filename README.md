@@ -20,6 +20,7 @@ surface below is plain HTTP against the same lens:
 |---|---|---|---|
 | **Semantic search** | `/search` | `POST /v1/search/food_products` | Ask in plain English — "organic oat milk", "spicy ramen". |
 | **Typed query** | `/query` | `POST /v1/query/food_products` | Ask in shape — filters, `orderBy`, `limit`, `offset`. |
+| **Similar** | `/similar` | `POST /v1/similar/food_products` | Pass any record id, get nearest neighbors in embedding space. |
 | **Feeds** | `/feeds` | `POST /v1/feed/food_products/:name` | Composed, live-evolving streams (Discover · Latest · relatedTo). |
 
 The landing at `/` is a mode picker — three tiles, pick your surface.

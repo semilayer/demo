@@ -28,6 +28,15 @@ Content-Type: application/json
   "pageSize": 12
 }`
 
+const SIMILAR_SNIPPET = `POST ${API_BASE}/v1/similar/${LENS}
+Authorization: Bearer pk_...
+Content-Type: application/json
+
+{
+  "id": "42",
+  "limit": 12
+}`
+
 const CONFIG_SNIPPET = `// one lens. that's the whole config.
 food_products: {
   facets: {
@@ -44,9 +53,15 @@ food_products: {
   },
 }`
 
-export function HowItWorks({ mode }: { mode: 'search' | 'query' | 'feed' }) {
+export function HowItWorks({ mode }: { mode: 'search' | 'query' | 'feed' | 'similar' }) {
   const snippet =
-    mode === 'search' ? SEARCH_SNIPPET : mode === 'query' ? QUERY_SNIPPET : FEED_SNIPPET
+    mode === 'search'
+      ? SEARCH_SNIPPET
+      : mode === 'query'
+        ? QUERY_SNIPPET
+        : mode === 'similar'
+          ? SIMILAR_SNIPPET
+          : FEED_SNIPPET
   return (
     <section className="howto">
       <div className="howto-card">

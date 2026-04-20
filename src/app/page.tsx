@@ -86,6 +86,18 @@ export default function LandingPage() {
           ]}
         />
         <ModeTile
+          href="/similar"
+          badge="POST /v1/similar"
+          title="Similar"
+          gradient="linear-gradient(135deg, #f59e0b 0%, #f43f5e 100%)"
+          description="Pass any record id, get its nearest neighbors in embedding space. No embedding API call — the seed's vector is already stored. Chain-click to explore."
+          bullets={[
+            "Zero embedding cost per call",
+            'Click a result to re-seed',
+            'Declarative: which fields drive similarity',
+          ]}
+        />
+        <ModeTile
           href="/feeds"
           badge="POST /v1/feed"
           title="Feeds"
@@ -118,11 +130,16 @@ export default function LandingPage() {
       <style jsx>{`
         .mode-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 1.2rem;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 1.1rem;
           margin: 2.5rem 0;
         }
-        @media (max-width: 900px) {
+        @media (max-width: 1100px) {
+          .mode-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        @media (max-width: 640px) {
           .mode-grid {
             grid-template-columns: 1fr;
           }

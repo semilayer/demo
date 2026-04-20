@@ -10,6 +10,7 @@ export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? ''
 
 export const SEARCH_URL = `${API_BASE}/v1/search/${LENS}`
 export const QUERY_URL = `${API_BASE}/v1/query/${LENS}`
+export const SIMILAR_URL = `${API_BASE}/v1/similar/${LENS}`
 
 export const PAGE_SIZE = 10
 
@@ -64,4 +65,9 @@ export interface SearchHit {
 export interface SearchResponse {
   results: SearchHit[]
   meta: { lens: string; query: string; mode: string; count: number; durationMs: number }
+}
+
+export interface SimilarResponse {
+  results: SearchHit[]
+  meta: { lens: string; sourceId: string; count: number; durationMs: number }
 }
