@@ -138,6 +138,140 @@ button {
   margin-bottom: 1.2rem;
 }
 
+/* ── feeds page frame (pulled out of styled-jsx so the ─
+      skeleton is styled on first paint even before the
+      React client bundle hydrates) ────────────────────── */
+.feeds-shell {
+  max-width: 1280px;
+}
+.feed-masonry {
+  column-gap: 0.9rem;
+  column-fill: balance;
+  margin-top: 1rem;
+  column-width: 280px;
+}
+@media (min-width: 760px) {
+  .feed-masonry {
+    column-count: 3;
+  }
+}
+@media (min-width: 1040px) {
+  .feed-masonry {
+    column-count: 4;
+  }
+}
+
+.feed-card {
+  display: block;
+  position: relative;
+  break-inside: avoid;
+  margin: 0 0 0.9rem;
+  border-radius: 14px;
+  overflow: hidden;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: transform 160ms, box-shadow 160ms;
+  background-color: var(--panel);
+  /* The card root carries the rainbow gradient as a background-image
+     set inline via React style. `overflow: hidden` + the inner .feed-card-inner
+     margin gives us a clean 1.5px gradient border on every side, with
+     matching corner radii, no sub-pixel bleed. */
+}
+.feed-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 34px rgba(139, 92, 246, 0.28);
+}
+.feed-card-inner {
+  position: relative;
+  margin: 1.5px;
+  padding: 0.9rem 1.1rem 0.85rem;
+  border-radius: 12.5px;
+  background: rgba(15, 16, 36, 0.78);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.feed-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+.feed-card-title {
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.feed-card-subtitle {
+  font-size: 0.78rem;
+  text-transform: capitalize;
+  font-weight: 500;
+}
+.feed-card-chips {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-top: 0.1rem;
+}
+.feed-card-chip {
+  font-size: 0.7rem;
+  text-transform: capitalize;
+  padding: 2px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.feed-card-desc {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin: 0.1rem 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.feed-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+}
+.feed-like-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 0.75rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.92);
+  transition: all 150ms;
+}
+.feed-like-btn:hover {
+  border-color: #f472b6;
+  color: #fbcfe8;
+}
+.feed-like-btn.liked {
+  background: rgba(244, 114, 182, 0.2);
+  border-color: #f472b6;
+  color: #fbcfe8;
+}
+.feed-chase {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 700;
+}
+.feed-card:hover .feed-chase {
+  color: #fff;
+}
+
 /* ── hero ─────────────────────────────────────────── */
 .hero-block {
   margin-bottom: 2.5rem;

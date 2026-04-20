@@ -253,7 +253,7 @@ function FeedList({
 
   return (
     <section>
-      <div className="feed-grid">
+      <div className="feed-masonry">
         {items.map((item) => (
           <ItemCard
             key={`${feedName}-${item.sourceRowId}`}
@@ -283,12 +283,6 @@ function FeedList({
       )}
 
       <style jsx>{`
-        .feed-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 0.9rem;
-          margin-top: 1rem;
-        }
         .load-more-wrap {
           display: flex;
           justify-content: center;
@@ -358,42 +352,40 @@ function ItemCard({
   return (
     <Link
       href={`/feeds/detail?id=${encodeURIComponent(String(m.id))}`}
-      className="card"
+      className="feed-card"
       style={{ backgroundImage: gradient }}
     >
-      <div className="card-inner">
-        <div className="top-row">
-          <span className="rank">#{item.rank}</span>
-          <span className="score" title="feed score (higher = better fit)">
-            {item.score.toFixed(4)}
-          </span>
+      <div className="feed-card-inner">
+        <div className="feed-card-top">
+          <span>#{item.rank}</span>
+          <span title="feed score (higher = better fit)">{item.score.toFixed(4)}</span>
         </div>
-        <div className="title" style={{ color: tone.title }}>
+        <div className="feed-card-title" style={{ color: tone.title }}>
           {title}
         </div>
         {subtitle && (
-          <div className="subtitle" style={{ color: tone.subtitle }}>
+          <div className="feed-card-subtitle" style={{ color: tone.subtitle }}>
             {subtitle}
           </div>
         )}
         {chips.length > 0 && (
-          <div className="chips">
+          <div className="feed-card-chips">
             {chips.slice(0, 4).map((c, i) => (
-              <span key={i} className="tag">
+              <span key={i} className="feed-card-chip">
                 {c}
               </span>
             ))}
           </div>
         )}
         {desc && (
-          <p className="desc" style={{ color: tone.subtitle }}>
+          <p className="feed-card-desc" style={{ color: tone.subtitle }}>
             {desc}
           </p>
         )}
-        <div className="actions">
+        <div className="feed-card-actions">
           <button
             type="button"
-            className={isLiked ? 'like-btn liked' : 'like-btn'}
+            className={isLiked ? 'feed-like-btn liked' : 'feed-like-btn'}
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
@@ -403,117 +395,9 @@ function ItemCard({
           >
             {isLiked ? '♥ liked' : '♡ like'}
           </button>
-          <span className="chase">View similar →</span>
+          <span className="feed-chase">View similar →</span>
         </div>
       </div>
-
-      <style jsx>{`
-        .card {
-          display: block;
-          padding: 1.5px;
-          border-radius: 14px;
-          text-decoration: none;
-          transition: transform 160ms, box-shadow 160ms;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-        }
-        .card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 12px 34px rgba(139, 92, 246, 0.28);
-        }
-        .card-inner {
-          padding: 0.9rem 1.1rem 0.85rem;
-          border-radius: 12.5px;
-          background: rgba(15, 16, 36, 0.72);
-          backdrop-filter: blur(12px);
-          display: flex;
-          flex-direction: column;
-          gap: 0.4rem;
-          min-height: 210px;
-        }
-        .top-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-family: var(--mono);
-          font-size: 0.72rem;
-        }
-        .rank {
-          color: rgba(255, 255, 255, 0.55);
-        }
-        .score {
-          color: rgba(255, 255, 255, 0.55);
-        }
-        .title {
-          font-weight: 700;
-          font-size: 1rem;
-          line-height: 1.3;
-          letter-spacing: -0.01em;
-        }
-        .subtitle {
-          font-size: 0.78rem;
-          text-transform: capitalize;
-          font-weight: 500;
-        }
-        .chips {
-          display: flex;
-          gap: 0.3rem;
-          flex-wrap: wrap;
-          margin-top: 0.1rem;
-        }
-        .tag {
-          font-size: 0.7rem;
-          text-transform: capitalize;
-          padding: 2px 9px;
-          background: rgba(255, 255, 255, 0.08);
-          color: rgba(255, 255, 255, 0.85);
-          border-radius: 999px;
-          border: 1px solid rgba(255, 255, 255, 0.14);
-        }
-        .desc {
-          font-size: 0.78rem;
-          line-height: 1.45;
-          margin: 0.1rem 0 0;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .actions {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-top: auto;
-          padding-top: 0.6rem;
-        }
-        .like-btn {
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.18);
-          font-size: 0.75rem;
-          padding: 0.3rem 0.75rem;
-          border-radius: 999px;
-          cursor: pointer;
-          color: rgba(255, 255, 255, 0.9);
-          transition: all 150ms;
-        }
-        .like-btn:hover {
-          border-color: #f472b6;
-          color: #fbcfe8;
-        }
-        .like-btn.liked {
-          background: rgba(244, 114, 182, 0.2);
-          border-color: #f472b6;
-          color: #fbcfe8;
-        }
-        .chase {
-          font-size: 0.78rem;
-          color: rgba(255, 255, 255, 0.78);
-          font-weight: 700;
-          letter-spacing: 0.01em;
-        }
-        .card:hover .chase {
-          color: #fff;
-        }
-      `}</style>
     </Link>
   )
 }

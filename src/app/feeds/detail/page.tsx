@@ -100,7 +100,7 @@ function DetailInner() {
               <em> its</em> related items.
             </p>
           </div>
-          <div className="related-grid">
+          <div className="feed-masonry">
             {related.map((it) => (
               <RelatedCard
                 key={it.sourceRowId}
@@ -168,11 +168,6 @@ function DetailInner() {
           color: var(--text);
           padding: 1px 6px;
           border-radius: 4px;
-        }
-        .related-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-          gap: 0.9rem;
         }
       `}</style>
     </main>
@@ -306,16 +301,28 @@ function RelatedCard({
   const tone = contentTone(item.score)
 
   return (
-    <Link href={`/feeds/detail?id=${encodeURIComponent(String(m.id))}`} className="card" style={{ backgroundImage: gradient }}>
-      <div className="card-inner">
-        <div className="title" style={{ color: tone.title }}>
+    <Link
+      href={`/feeds/detail?id=${encodeURIComponent(String(m.id))}`}
+      className="feed-card"
+      style={{ backgroundImage: gradient }}
+    >
+      <div className="feed-card-inner">
+        <div className="feed-card-top">
+          <span>#{item.rank}</span>
+          <span>{item.score.toFixed(4)}</span>
+        </div>
+        <div className="feed-card-title" style={{ color: tone.title }}>
           {title}
         </div>
-        {subtitle && <div className="subtitle" style={{ color: tone.subtitle }}>{subtitle}</div>}
-        <div className="actions">
+        {subtitle && (
+          <div className="feed-card-subtitle" style={{ color: tone.subtitle }}>
+            {subtitle}
+          </div>
+        )}
+        <div className="feed-card-actions">
           <button
             type="button"
-            className={isLiked ? 'like-btn liked' : 'like-btn'}
+            className={isLiked ? 'feed-like-btn liked' : 'feed-like-btn'}
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
@@ -324,72 +331,9 @@ function RelatedCard({
           >
             {isLiked ? '♥' : '♡'}
           </button>
-          <span className="chase">View similar →</span>
+          <span className="feed-chase">View similar →</span>
         </div>
       </div>
-      <style jsx>{`
-        .card {
-          display: block;
-          padding: 1.5px;
-          border-radius: 12px;
-          text-decoration: none;
-          transition: transform 160ms, box-shadow 160ms;
-        }
-        .card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 28px rgba(139, 92, 246, 0.25);
-        }
-        .card-inner {
-          padding: 0.85rem 1rem 0.75rem;
-          border-radius: 10.5px;
-          background: rgba(15, 16, 36, 0.74);
-          backdrop-filter: blur(10px);
-          display: flex;
-          flex-direction: column;
-          gap: 0.3rem;
-          min-height: 96px;
-        }
-        .title {
-          font-weight: 600;
-          font-size: 0.88rem;
-          line-height: 1.3;
-          text-decoration: none;
-        }
-        .subtitle {
-          font-size: 0.72rem;
-          text-transform: capitalize;
-        }
-        .actions {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-top: auto;
-          padding-top: 0.5rem;
-        }
-        .like-btn {
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          font-size: 0.85rem;
-          padding: 1px 9px;
-          border-radius: 999px;
-          cursor: pointer;
-          color: var(--text);
-        }
-        .like-btn:hover {
-          border-color: #f472b6;
-          color: #f9a8d4;
-        }
-        .like-btn.liked {
-          background: rgba(244, 114, 182, 0.15);
-          border-color: #f472b6;
-          color: #fbcfe8;
-        }
-        .chase {
-          font-size: 0.72rem;
-          color: rgba(255, 255, 255, 0.75);
-          font-weight: 600;
-        }
-      `}</style>
     </Link>
   )
 }
