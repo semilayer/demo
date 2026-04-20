@@ -112,6 +112,32 @@ button {
   text-decoration: none;
 }
 
+.nav a.active {
+  color: var(--text);
+  border-color: rgba(139, 92, 246, 0.65);
+  background: var(--panel-2);
+}
+
+.nav-sep {
+  color: var(--text-fade);
+  padding: 0 0.15rem;
+  user-select: none;
+}
+
+.brand-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.brand-link:hover {
+  text-decoration: none;
+}
+
+/* ── mode intro (shared by /search + /query) ─────────── */
+.mode-intro {
+  margin-bottom: 1.2rem;
+}
+
 /* ── hero ─────────────────────────────────────────── */
 .hero-block {
   margin-bottom: 2.5rem;
