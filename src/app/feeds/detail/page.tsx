@@ -105,6 +105,7 @@ function DetailInner() {
               <RelatedCard
                 key={it.sourceRowId}
                 item={it}
+                pageSize={related.length}
                 isLiked={likes.isLiked(it.metadata.id)}
                 onLike={() => likes.toggle(it.metadata)}
               />
@@ -187,7 +188,8 @@ function SeedHeader({
   const subtitle = displaySubtitle(item)
   const chips = displayChips(item)
   const desc = typeof item.description === 'string' ? item.description : null
-  const gradient = cardGradient(String(item.id), 1)
+  // Seed always paints as "the hottest card" — rank 1 of 1.
+  const gradient = cardGradient(String(item.id), 1, 1)
 
   return (
     <section className="seed" style={{ backgroundImage: gradient }}>
@@ -287,18 +289,20 @@ function SeedHeader({
 
 function RelatedCard({
   item,
+  pageSize,
   isLiked,
   onLike,
 }: {
   item: FeedItem
+  pageSize: number
   isLiked: boolean
   onLike: () => void
 }) {
   const m = item.metadata
   const title = displayTitle(m)
   const subtitle = displaySubtitle(m)
-  const gradient = cardGradient(String(m.id), item.score)
-  const tone = contentTone(item.score)
+  const gradient = cardGradient(String(m.id), item.rank, pageSize)
+  const tone = contentTone(item.rank, pageSize)
 
   return (
     <Link

@@ -258,6 +258,7 @@ function FeedList({
           <ItemCard
             key={`${feedName}-${item.sourceRowId}`}
             item={item}
+            pageSize={items.length}
             isLiked={likes.isLiked(item.metadata.id)}
             onToggleLike={() => likes.toggle(item.metadata)}
           />
@@ -334,10 +335,12 @@ function FeedList({
 
 function ItemCard({
   item,
+  pageSize,
   isLiked,
   onToggleLike,
 }: {
   item: FeedItem
+  pageSize: number
   isLiked: boolean
   onToggleLike: () => void
 }) {
@@ -346,8 +349,8 @@ function ItemCard({
   const subtitle = displaySubtitle(m)
   const chips = displayChips(m)
   const desc = typeof m.description === 'string' ? m.description : null
-  const gradient = cardGradient(String(m.id), item.score)
-  const tone = contentTone(item.score)
+  const gradient = cardGradient(String(m.id), item.rank, pageSize)
+  const tone = contentTone(item.rank, pageSize)
 
   return (
     <Link
