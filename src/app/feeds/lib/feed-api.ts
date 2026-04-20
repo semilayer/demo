@@ -12,8 +12,8 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'https://api.semilayer.com'
 /**
  * The lens the feed demo calls. Defaults to `food_products` to match the
- * existing `/` search+query demo. Override via env when running against a
- * different lens (e.g. the `recipes` lens from example-stack).
+ * rest of the demo; override via `NEXT_PUBLIC_FEEDS_LENS` when pointing
+ * at a different lens on your own deployment.
  */
 export const FEED_LENS = process.env.NEXT_PUBLIC_FEEDS_LENS ?? 'food_products'
 export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? ''

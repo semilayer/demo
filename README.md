@@ -162,7 +162,6 @@ the only inline style — everything else is a class.
 - [semilayer.com](https://semilayer.com) — the project
 - [semilayer.dev](https://semilayer.dev) — docs
 - [semilayer.dev/feeds](https://semilayer.dev/feeds) — feed config reference
-- [github.com/semilayer/example-stack](https://github.com/semilayer/example-stack) — a local `sl.config.ts` with feeds wired end-to-end
 
 ## License
 
