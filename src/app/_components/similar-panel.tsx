@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   API_KEY,
   QUERY_URL,
@@ -34,6 +35,8 @@ const SEED_POOL = 500
 const DEFAULT_LIMIT = 12
 
 export function SimilarPanel() {
+  const sp = useSearchParams()
+  const seedFromUrl = sp?.get('seed') ?? null
   const [seed, setSeed] = useState<FoodRow | null>(null)
   const [results, setResults] = useState<SimilarResponse['results']>([])
   const [meta, setMeta] = useState<SimilarResponse['meta'] | null>(null)
@@ -51,6 +54,23 @@ export function SimilarPanel() {
         Authorization: `Bearer ${API_KEY}`,
       },
       body: JSON.stringify({ limit: 1, offset, orderBy: { field: 'id', dir: 'asc' } }),
+    })
+    if (!res.ok) throw new Error(`query failed: ${res.status}`)
+    const json = (await res.json()) as QueryResponse
+    return json.rows[0] ?? null
+  }, [])
+
+  /** Fetch a specific row by id — used when the search page hands us a seed. */
+  const fetchById = useCallback(async (id: string): Promise<FoodRow | null> => {
+    const numericId = Number(id)
+    const where = Number.isFinite(numericId) ? { id: numericId } : { id }
+    const res = await fetch(QUERY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({ where, limit: 1 }),
     })
     if (!res.ok) throw new Error(`query failed: ${res.status}`)
     const json = (await res.json()) as QueryResponse
@@ -101,8 +121,31 @@ export function SimilarPanel() {
   }, [pickRandomSeed, fetchSimilar])
 
   useEffect(() => {
-    void runRandom() /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [])
+    let cancelled = false
+    const boot = async () => {
+      if (seedFromUrl) {
+        // Search page (or anyone else with a deep-link) handed us a specific
+        // seed. Honour it; fall through to random if the lookup misses.
+        try {
+          const row = await fetchById(seedFromUrl)
+          if (cancelled) return
+          if (row) {
+            setSeed(row)
+            await fetchSimilar(row)
+            return
+          }
+        } catch {
+          // swallow — fall through to random
+        }
+      }
+      if (!cancelled) await runRandom()
+    }
+    void boot()
+    return () => {
+      cancelled = true
+    }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [seedFromUrl])
 
   const reSeedFromResult = useCallback(
     (row: FoodRow) => {
