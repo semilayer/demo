@@ -1,0 +1,47 @@
+<svg width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <!-- TOP (purple) - richer, deeper contrast -->
+        <linearGradient id="gradTop" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#5a3bff"/>
+            <stop offset="50%" stop-color="#8f5bff"/>
+            <stop offset="100%" stop-color="#ff3ec9"/>
+        </linearGradient>
+
+        <!-- MIDDLE (blue) - more electric -->
+        <linearGradient id="gradMid" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#2f5bff"/>
+            <stop offset="50%" stop-color="#3f8cff"/>
+            <stop offset="100%" stop-color="#00e0ff"/>
+        </linearGradient>
+
+        <!-- BOTTOM (teal/lime instead of green/yellow) -->
+        <linearGradient id="gradBot" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00a88f"/>
+            <stop offset="50%" stop-color="#00d4aa"/>
+            <stop offset="100%" stop-color="#b6ff3b"/>
+        </linearGradient>
+    </defs>
+
+    <!-- center + tilt -->
+    <g transform="translate(250,250) scale(1,0.7)">
+
+        <!-- bottom -->
+        <rect x="-110" y="-110" width="220" height="220"
+              rx="28"
+              fill="url(#gradBot)"
+              transform="translate(0,90) rotate(45)" />
+
+        <!-- middle -->
+        <rect x="-100" y="-100" width="200" height="200"
+              rx="26"
+              fill="url(#gradMid)"
+              transform="translate(0,30) rotate(45)" />
+
+        <!-- top -->
+        <rect x="-90" y="-90" width="180" height="180"
+              rx="24"
+              fill="url(#gradTop)"
+              transform="translate(0,-40) rotate(45)" />
+
+    </g>
+</svg>

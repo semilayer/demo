@@ -27,6 +27,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 a { color: var(--purple); text-decoration: none; }
@@ -43,6 +44,12 @@ button {
   padding: 3rem 1.5rem 5rem;
 }
 
+@media (max-width: 640px) {
+  .shell {
+    padding: 1.75rem 1rem 3.5rem;
+  }
+}
+
 /* ── header ─────────────────────────────────────────── */
 .header {
   display: flex;
@@ -53,6 +60,24 @@ button {
   margin-bottom: 2.5rem;
 }
 
+@media (max-width: 640px) {
+  .header {
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+  }
+  .nav {
+    width: 100%;
+    gap: 0.3rem;
+  }
+  .nav a {
+    font-size: 0.78rem;
+    padding: 0.4rem 0.7rem;
+  }
+  .nav-sep {
+    display: none;
+  }
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -60,17 +85,10 @@ button {
 }
 
 .brand-mark {
-  width: 38px;
-  height: 38px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 50%, #10b981 100%);
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  color: #fff;
-  font-size: 1rem;
-  letter-spacing: -0.02em;
-  box-shadow: 0 10px 30px rgba(139, 92, 246, 0.35);
+  width: 44px;
+  height: 44px;
+  display: block;
+  flex-shrink: 0;
 }
 
 .brand-name {
@@ -752,6 +770,10 @@ td.price {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.25rem 1.4rem;
+  /* Grid children default to min-width: auto, which lets the <pre> inside
+     push the track wider than its share. Pin to 0 so overflow-x: auto on
+     .code-block actually clips instead of bleeding out of the card. */
+  min-width: 0;
 }
 
 .howto-card h3 {
@@ -782,6 +804,7 @@ td.price {
   overflow-x: auto;
   white-space: pre;
   margin: 0;
+  max-width: 100%;
 }
 
 .code-block .com { color: var(--text-fade); }

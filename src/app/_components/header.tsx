@@ -10,7 +10,8 @@ export function SiteHeader() {
   return (
     <header className="header">
       <Link href="/" className="brand brand-link">
-        <div className="brand-mark">SL</div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.svg" alt="SemiLayer" width={44} height={44} className="brand-mark" />
         <div>
           <div className="brand-name">SemiLayer · Live Demo</div>
           <div className="brand-tag">ask anything. no backend.</div>

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
 import './globals.css'
 
@@ -6,11 +6,21 @@ export const metadata: Metadata = {
   title: 'SemiLayer Live Demo — semantic search + typed query, no backend',
   description:
     'A bare-bones HTML page calling SemiLayer over plain HTTP. Search and query a 500-row product fixture, with timing and pagination — no SDK, no backend.',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/icon-192.png',
+  },
   openGraph: {
     title: 'SemiLayer Live Demo',
     description:
       'Search and query a Postgres dataset with zero backend code — just fetch() against the SemiLayer API.',
   },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

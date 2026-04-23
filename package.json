@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "next build",
-    "dev": "next dev --port 3400",
+    "dev": "next dev --port 3600",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
