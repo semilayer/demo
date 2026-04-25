@@ -25,9 +25,14 @@ import { cardGradient, contentTone } from './lib/card-gradient'
 
 type FeedName = 'discover' | 'latest'
 
+// Pool size — both feeds (`discover` + `latest`) are capped at 5000
+// candidates in the lens config, so the floating pill shows "out of 5000"
+// regardless of which tab is active.
+const FEED_POOL_SIZE = 5000
+
 export default function FeedsHome() {
   const [active, setActive] = useState<FeedName>('discover')
-  const [reloadOnLike, setReloadOnLike] = useState(true)
+  const [reloadOnLike, setReloadOnLike] = useState(false)
   const likes = useLikes()
 
   const context = useMemo(
@@ -62,6 +67,7 @@ export default function FeedsHome() {
         context={active === 'discover' ? context : undefined}
         likes={likes}
         reloadOnContextChange={active === 'discover' && reloadOnLike}
+        feedTotal={FEED_POOL_SIZE}
       />
 
       <Explainer feedName={active} likedCount={likes.liked.length} reloadOnLike={reloadOnLike} />
@@ -287,18 +293,22 @@ function ReloadOnLikeToggle({
 
 /* ─── Feed list (infinite scroll + shimmer-on-refetch) ──── */
 
+type LoadedFeedItem = FeedItem & { __pageSize: number }
+
 function FeedList({
   feedName,
   context,
   likes,
   reloadOnContextChange,
+  feedTotal,
 }: {
   feedName: FeedName
   context: Record<string, unknown> | undefined
   likes: ReturnType<typeof useLikes>
   reloadOnContextChange: boolean
+  feedTotal: number
 }) {
-  const [items, setItems] = useState<FeedItem[]>([])
+  const [items, setItems] = useState<LoadedFeedItem[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isRefetching, setIsRefetching] = useState(false)
@@ -313,8 +323,16 @@ function FeedList({
   const contextRef = useRef(context)
   contextRef.current = context
 
+  // Refs guard against double-fires from the IntersectionObserver (it can
+  // trigger again before React has applied the loading state).
+  const isLoadingRef = useRef(false)
+  const cursorRef = useRef<string | null>(null)
+  cursorRef.current = cursor
+
   const load = useCallback(
     async (nextCursor: string | null, isRefetch: boolean) => {
+      if (isLoadingRef.current) return
+      isLoadingRef.current = true
       if (isRefetch && items.length > 0) setIsRefetching(true)
       else setIsLoading(true)
       setError(null)
@@ -323,16 +341,24 @@ function FeedList({
         const page = await fetchFeedPage(feedName, {
           context: contextRef.current,
           cursor: nextCursor ?? undefined,
+          pageSize: 25,
         })
         setMeta(page.meta)
         setRoundTripMs(Math.round(performance.now() - t0))
-        setItems((prev) => (isRefetch ? page.items : [...prev, ...page.items]))
+        // Tag each item with the size of the page it arrived on, so the
+        // rank-driven gradient stays stable when later pages append.
+        const tagged: LoadedFeedItem[] = page.items.map((it) => ({
+          ...it,
+          __pageSize: page.items.length,
+        }))
+        setItems((prev) => (isRefetch ? tagged : [...prev, ...tagged]))
         setCursor(page.cursor)
       } catch (err) {
         setError((err as Error).message)
       } finally {
         setIsLoading(false)
         setIsRefetching(false)
+        isLoadingRef.current = false
       }
     },
     [feedName, items.length],
@@ -365,11 +391,40 @@ function FeedList({
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [contextKey, reloadOnContextChange])
 
+  // Infinite scroll — load the next page when a sentinel near the end of the
+  // list scrolls into view. The sentinel is rendered only while a cursor
+  // exists, so removing it stops the observer from firing.
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const node = sentinelRef.current
+    if (!node) return
+    if (!cursor) return
+    if (typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const next = cursorRef.current
+            if (next && !isLoadingRef.current) {
+              void load(next, false)
+            }
+          }
+        }
+      },
+      { rootMargin: '600px 0px' },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [cursor, load])
+
   return (
     <section>
       {/* Status pills (round-trip + server + count) */}
       <div className="status-row">
         {isLoading && <span className="spinner" />}
+        <span className="status-pill mode" title="Pages auto-load as you scroll">
+          ↕ Infinite scroll
+        </span>
         {roundTripMs != null && (
           <span className="status-pill timing">
             Round-trip <strong>{formatMs(roundTripMs)}</strong>
@@ -388,30 +443,33 @@ function FeedList({
         {error && <span className="status-pill error">{error}</span>}
       </div>
 
-      {/* Masonry + shimmer overlay (visible during a refetch over an
-          existing result set; hidden on the very first load where we
-          want to show a clean skeleton instead). */}
+      {/* JS-distributed columns + shimmer overlay. Using CSS columns
+          (column-fill: balance) re-flowed every existing card whenever
+          a new page appended; the column buckets here are append-only
+          so existing cards never move. */}
       <div className="shimmer-wrap">
-        <div className="feed-masonry">
-          {items.map((item) => (
+        <StableColumns
+          items={items}
+          getKey={(it) => `${feedName}-${it.sourceRowId}`}
+          render={(item) => (
             <ItemCard
               key={`${feedName}-${item.sourceRowId}`}
               item={item}
-              pageSize={items.length}
+              pageSize={item.__pageSize}
               isLiked={likes.isLiked(item.metadata.id)}
               onToggleLike={() => likes.toggle(item.metadata)}
             />
-          ))}
-        </div>
+          )}
+        />
         {isRefetching && <div className="shimmer-banner">Re-ranking with your new likes…</div>}
         <div className={isRefetching ? 'shimmer-overlay visible' : 'shimmer-overlay'} />
       </div>
 
-      {cursor && !isLoading && !isRefetching && (
-        <div className="load-more-wrap">
-          <button type="button" className="load-more" onClick={() => void load(cursor, false)}>
-            Load more
-          </button>
+      {cursor && (
+        <div ref={sentinelRef} className="sentinel" aria-hidden="true">
+          {isLoading && items.length > 0 && (
+            <span className="sentinel-spinner" aria-label="Loading more" />
+          )}
         </div>
       )}
 
@@ -426,28 +484,36 @@ function FeedList({
         </p>
       )}
 
+      <FloatingStatusPill
+        visible={items.length > 0}
+        loaded={items.length}
+        feedTotal={feedTotal}
+        loading={isLoading || isRefetching}
+      />
+
       <style jsx>{`
         .status-row {
           margin: 0 0 0.9rem;
         }
-        .load-more-wrap {
+        .sentinel {
           display: flex;
           justify-content: center;
-          margin-top: 1.5rem;
+          align-items: center;
+          height: 80px;
+          margin-top: 1rem;
         }
-        .load-more {
-          padding: 0.6rem 1.3rem;
-          background: var(--panel);
-          border: 1px solid var(--border);
-          border-radius: 999px;
-          font-size: 0.85rem;
-          cursor: pointer;
-          color: var(--text);
-          transition: all 150ms;
+        .sentinel-spinner {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          border: 2px solid var(--border);
+          border-top-color: var(--purple);
+          animation: spin 700ms linear infinite;
         }
-        .load-more:hover {
-          border-color: rgba(139, 92, 246, 0.6);
-          background: var(--panel-2);
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
         }
         .hint {
           text-align: center;
@@ -471,6 +537,195 @@ function FeedList({
 function formatMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(2)}s`
+}
+
+/* ─── Stable column layout (append-only) ─────────────────────
+ * CSS columns rebalance every existing card on append, which
+ * makes infinite-scroll loads visibly jump. We keep our own
+ * column buckets and a stable per-item assignment so new items
+ * land in the shortest column without disturbing siblings. */
+
+function useColumnCount(): number {
+  const [cols, setCols] = useState(4)
+  useEffect(() => {
+    const mqLg = window.matchMedia('(min-width: 1040px)')
+    const mqMd = window.matchMedia('(min-width: 760px)')
+    const update = () => {
+      if (mqLg.matches) setCols(4)
+      else if (mqMd.matches) setCols(3)
+      else setCols(1)
+    }
+    update()
+    mqLg.addEventListener('change', update)
+    mqMd.addEventListener('change', update)
+    return () => {
+      mqLg.removeEventListener('change', update)
+      mqMd.removeEventListener('change', update)
+    }
+  }, [])
+  return cols
+}
+
+function StableColumns<T>({
+  items,
+  getKey,
+  render,
+}: {
+  items: T[]
+  getKey: (item: T) => string
+  render: (item: T) => React.ReactNode
+}) {
+  const cols = useColumnCount()
+  const prevAssignsRef = useRef<Map<string, number>>(new Map())
+  const prevColsRef = useRef(cols)
+
+  const buckets = useMemo(() => {
+    const startFresh = prevColsRef.current !== cols
+    const next = new Map<string, number>()
+    const counts = new Array(cols).fill(0)
+
+    if (!startFresh) {
+      for (const item of items) {
+        const k = getKey(item)
+        const existing = prevAssignsRef.current.get(k)
+        if (existing != null && existing < cols) {
+          next.set(k, existing)
+          counts[existing]++
+        }
+      }
+    }
+    for (const item of items) {
+      const k = getKey(item)
+      if (next.has(k)) continue
+      let min = 0
+      for (let i = 1; i < cols; i++) {
+        if (counts[i] < counts[min]) min = i
+      }
+      next.set(k, min)
+      counts[min]++
+    }
+
+    prevAssignsRef.current = next
+    prevColsRef.current = cols
+
+    const cells: T[][] = Array.from({ length: cols }, () => [])
+    for (const item of items) {
+      const c = next.get(getKey(item)) ?? 0
+      cells[Math.min(c, cols - 1)].push(item)
+    }
+    return cells
+  }, [items, cols, getKey])
+
+  return (
+    <div className="stable-cols">
+      {buckets.map((col, i) => (
+        <div key={i} className="stable-col">
+          {col.map((item) => render(item))}
+        </div>
+      ))}
+      <style jsx>{`
+        .stable-cols {
+          display: flex;
+          gap: 0.9rem;
+          align-items: flex-start;
+          margin-top: 1rem;
+        }
+        .stable-col {
+          flex: 1 1 0;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/* ─── Floating bottom-center status pill ──────────────────── */
+
+function FloatingStatusPill({
+  visible,
+  loaded,
+  feedTotal,
+  loading,
+}: {
+  visible: boolean
+  loaded: number
+  feedTotal: number
+  loading: boolean
+}) {
+  return (
+    <div className={visible ? 'float-pill visible' : 'float-pill'} role="status" aria-live="polite">
+      <span className="dot" data-loading={loading} />
+      <span>
+        <strong>{loaded}</strong> {loaded === 1 ? 'record' : 'records'}
+      </span>
+      <span className="muted">
+        out of <strong>{feedTotal}</strong> for this feed
+      </span>
+      <style jsx>{`
+        .float-pill {
+          position: fixed;
+          left: 50%;
+          bottom: 1.2rem;
+          transform: translate(-50%, 12px);
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.45rem 0.95rem;
+          background: rgba(17, 18, 26, 0.85);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          color: var(--text-dim);
+          font-size: 0.78rem;
+          line-height: 1;
+          z-index: 40;
+          opacity: 0;
+          pointer-events: none;
+          transition:
+            opacity 200ms ease,
+            transform 200ms ease;
+          box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+        }
+        .float-pill.visible {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+        .float-pill strong {
+          color: var(--text);
+          font-weight: 600;
+          margin: 0 2px;
+        }
+        .muted {
+          color: var(--text-fade);
+        }
+        .dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--green);
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+        }
+        .dot[data-loading='true'] {
+          background: var(--purple);
+          animation: float-pulse 1.2s ease-out infinite;
+        }
+        @keyframes float-pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.55);
+          }
+          70% {
+            box-shadow: 0 0 0 8px rgba(139, 92, 246, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+          }
+        }
+      `}</style>
+    </div>
+  )
 }
 
 /* ─── Item card (rainbow gradient + click affordance) ─────── */
