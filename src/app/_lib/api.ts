@@ -94,3 +94,11 @@ export interface AnalyzeResponse {
     approximate?: boolean
   }
 }
+
+export interface AnalyzeRowsPage {
+  rows: FoodRow[]
+  /** Opaque cursor for the next page; null/absent when there's no more. */
+  cursor?: string | null
+  /** Total matching rows across all pages — server-computed, may be approximate. */
+  total?: number
+}
