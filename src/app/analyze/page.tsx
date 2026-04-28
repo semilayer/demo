@@ -707,11 +707,19 @@ const EMPTY_DRILL_DATA: DrillData = {
 
 function DrillPanel({ drill, onClose }: DrillPanelProps) {
   const [data, setData] = useState<DrillData>(EMPTY_DRILL_DATA)
+  // dataRef mirrors `data` so fetchMore can read the latest cursor /
+  // hasMore without needing them in its dep array — keeps the callback
+  // stable so the IO effect doesn't re-attach on every state churn.
+  const dataRef = useRef(data)
+  useEffect(() => {
+    dataRef.current = data
+  }, [data])
   const listRef = useRef<HTMLUListElement | null>(null)
   const sentinelRef = useRef<HTMLLIElement | null>(null)
-  // Track in-flight pagination requests across the IO callback's stale
-  // closures — the observer only fires on intersection, but the cursor it
-  // sees inside its closure is the cursor at attach time.
+  // Single source of truth for "a paging request is in flight". Set
+  // synchronously before kicking off fetch, cleared in finally. Guards
+  // against double-fires from StrictMode and from IO observer re-attach
+  // when state churns mid-page.
   const inFlightRef = useRef(false)
 
   // Reset + first-page fetch on every bucketKey change. Also runs on mount.
@@ -737,7 +745,6 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
       })
       .then((page) => {
         if (cancelled) return
-        inFlightRef.current = false
         const cursor = page.cursor ?? null
         setData({
           rows: page.rows ?? [],
@@ -751,12 +758,14 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        inFlightRef.current = false
         setData({
           ...EMPTY_DRILL_DATA,
           loading: false,
           error: err instanceof Error ? err.message : 'fetch failed',
         })
+      })
+      .finally(() => {
+        if (!cancelled) inFlightRef.current = false
       })
 
     return () => {
@@ -764,60 +773,62 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
     }
   }, [drill.bucketKey, drill.spec.name])
 
-  // Append the next page. Reads cursor via setData's previous-state
-  // form so the closure is always up-to-date.
+  // Append the next page. The synchronous in-flight guard + cursor capture
+  // happen BEFORE any state setter so React (incl. StrictMode) cannot
+  // double-fire the fetch. Setters only update state, never trigger I/O.
   const fetchMore = useCallback(() => {
     if (inFlightRef.current) return
-    setData((prev) => {
-      if (!prev.hasMore || !prev.cursor || prev.loading || prev.loadingMore) {
-        return prev
-      }
-      inFlightRef.current = true
-      const cursorAtRequest = prev.cursor
-      // Fire the fetch outside React's render — but capturing cursorAtRequest
-      // in this branch keeps it correct regardless of further state churn.
-      void (async () => {
-        try {
-          const res = await fetch(`${ANALYZE_URL}/${drill.spec.name}/rows`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${API_KEY}`,
-            },
-            body: JSON.stringify({
-              bucketKey: drill.bucketKey,
-              limit: PAGE_LIMIT,
-              cursor: cursorAtRequest,
-            }),
-          })
-          if (!res.ok) {
-            const text = await res.text()
-            throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`)
-          }
-          const page = (await res.json()) as AnalyzeRowsPage
-          inFlightRef.current = false
-          setData((cur) => {
-            const nextCursor = page.cursor ?? null
-            return {
-              ...cur,
-              rows: [...cur.rows, ...(page.rows ?? [])],
-              cursor: nextCursor,
-              hasMore: !!nextCursor,
-              loadingMore: false,
-              error: null,
-            }
-          })
-        } catch (err) {
-          inFlightRef.current = false
-          setData((cur) => ({
-            ...cur,
-            loadingMore: false,
-            error: err instanceof Error ? err.message : 'fetch failed',
-          }))
+    const cur = dataRef.current
+    if (!cur.hasMore || !cur.cursor || cur.loading || cur.loadingMore) return
+    inFlightRef.current = true
+    const cursorAtRequest = cur.cursor
+    setData((prev) => ({ ...prev, loadingMore: true }))
+
+    void (async () => {
+      try {
+        const res = await fetch(`${ANALYZE_URL}/${drill.spec.name}/rows`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${API_KEY}`,
+          },
+          body: JSON.stringify({
+            bucketKey: drill.bucketKey,
+            limit: PAGE_LIMIT,
+            cursor: cursorAtRequest,
+          }),
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`)
         }
-      })()
-      return { ...prev, loadingMore: true }
-    })
+        const page = (await res.json()) as AnalyzeRowsPage
+        setData((prev) => {
+          // Defense-in-depth: even if a duplicate request slipped past the
+          // in-flight guard (or the bridge returned overlapping rows under
+          // a write), filter ids we've already rendered.
+          const seen = new Set(prev.rows.map((r) => r.id))
+          const fresh = (page.rows ?? []).filter((r) => !seen.has(r.id))
+          const nextCursor = page.cursor ?? null
+          return {
+            ...prev,
+            rows: [...prev.rows, ...fresh],
+            cursor: nextCursor,
+            hasMore: !!nextCursor,
+            loadingMore: false,
+            error: null,
+          }
+        })
+      } catch (err) {
+        setData((prev) => ({
+          ...prev,
+          loadingMore: false,
+          error: err instanceof Error ? err.message : 'fetch failed',
+        }))
+      } finally {
+        inFlightRef.current = false
+      }
+    })()
   }, [drill.bucketKey, drill.spec.name])
 
   // Observe the sentinel — when it scrolls into view inside the list's
