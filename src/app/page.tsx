@@ -48,8 +48,8 @@ export default function LandingPage() {
           <span className="grad">indexed</span>.
         </h1>
         <p className="hero-sub">
-          One publishable key. One <code>food_products</code> lens. Three endpoints that let
-          you ask in words, ask in shape, or subscribe to a composed feed &mdash; each over
+          One publishable key. One <code>food_products</code> lens. Five surfaces to ask in
+          words, in shape, by similarity, by ranked feed, or by aggregate &mdash; each over
           plain <code>fetch()</code>, no SDK, no backend of our own. Pick a surface below to
           see the same data through a different window.
         </p>
@@ -109,6 +109,18 @@ export default function LandingPage() {
             'Likes in localStorage, no server write',
           ]}
         />
+        <ModeTile
+          href="/analyze"
+          badge="POST /v1/analyze"
+          title="Analyze"
+          gradient="linear-gradient(135deg, #ffd166 0%, #f59e0b 100%)"
+          description="Declared aggregations &mdash; group, bucket, drill down. Pick a price band or stock filter and watch four charts recompose live. Same lens, no SQL."
+          bullets={[
+            'Four named analyses on one lens',
+            'One filter feeds every chart',
+            'Click a bar to drill to the rows',
+          ]}
+        />
       </section>
 
       <section className="dataset-note">
@@ -130,11 +142,16 @@ export default function LandingPage() {
       <style jsx>{`
         .mode-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 1.1rem;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 1rem;
           margin: 2.5rem 0;
         }
-        @media (max-width: 1100px) {
+        @media (max-width: 1280px) {
+          .mode-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+        @media (max-width: 900px) {
           .mode-grid {
             grid-template-columns: repeat(2, 1fr);
           }

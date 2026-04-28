@@ -21,6 +21,7 @@ export function SiteHeader() {
         <Link href="/query" className={is('/query') ? 'active' : ''}>Query</Link>
         <Link href="/similar" className={is('/similar') ? 'active' : ''}>Similar</Link>
         <Link href="/feeds" className={is('/feeds') ? 'active' : ''}>Feeds</Link>
+        <Link href="/analyze" className={is('/analyze') ? 'active' : ''}>Analyze</Link>
         <span className="nav-sep" aria-hidden>·</span>
         <a href="https://semilayer.com">semilayer.com</a>
         <a href="https://semilayer.dev">Docs</a>

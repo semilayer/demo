@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@semilayer/charts": "^0.1.2",
+    "@semilayer/client": "^1.8.1",
+    "@semilayer/core": "^0.1.26",
     "next": "^15.3.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

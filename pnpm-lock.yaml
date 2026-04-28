@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@semilayer/charts':
+        specifier: ^0.1.2
+        version: 0.1.2
+      '@semilayer/client':
+        specifier: ^1.8.1
+        version: 1.8.1
+      '@semilayer/core':
+        specifier: ^0.1.26
+        version: 0.1.26
       next:
         specifier: ^15.3.0
         version: 15.5.15(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -334,6 +343,18 @@ packages:
 
   '@rushstack/eslint-patch@1.16.1':
     resolution: {integrity: sha512-TvZbIpeKqGQQ7X0zSCvPH9riMSFQFSggnfBjFZ1mEoILW+UuXCKwOoPcgjMwiUtRqFZ8jWhPJc4um14vC6I4ag==}
+
+  '@semilayer/charts@0.1.2':
+    resolution: {integrity: sha512-NuJOzG4DClrbBmGEcjcM+azjjCsTFH0EYke2GPxf41CRWMfa5lHKYuKMDEwGLQK6mGWvdHEJeVnTeUfpa98JHg==}
+
+  '@semilayer/client@1.8.1':
+    resolution: {integrity: sha512-CpxM6SHapxRi0ttwKPin2k/Bu6R29ZY2q6Tu8aNUIWcjBecEMsyxP4hP+KOVjLv2NhsnfH00t+uEEU0OLxCo4Q==}
+
+  '@semilayer/core@0.1.26':
+    resolution: {integrity: sha512-/u1qiaDtofW0cYl7qqxe+/9nHr4x954Ys86Zrgunj9ibJcZTp6NUWMUBioT7EwcX/9oBIxHvWE8I6FF4cr82ww==}
+
+  '@semilayer/headless@0.1.2':
+    resolution: {integrity: sha512-wl732HOQ3r3Riky1x2Vd2Qr6C1nksyn5E0Kxs1vIcQu+JyoIj8QOd5OCQFxZeCbDaOZk6wDGI+HiuHfBrtR1sw==}
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -1817,6 +1838,21 @@ snapshots:
   '@rtsao/scc@1.1.0': {}
 
   '@rushstack/eslint-patch@1.16.1': {}
+
+  '@semilayer/charts@0.1.2':
+    dependencies:
+      '@semilayer/client': 1.8.1
+      '@semilayer/headless': 0.1.2
+
+  '@semilayer/client@1.8.1':
+    dependencies:
+      '@semilayer/core': 0.1.26
+
+  '@semilayer/core@0.1.26': {}
+
+  '@semilayer/headless@0.1.2':
+    dependencies:
+      '@semilayer/client': 1.8.1
 
   '@swc/helpers@0.5.15':
     dependencies:
