@@ -741,7 +741,12 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
   // keystroke roundtripping to Postgres.
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [searchMode, setSearchMode] = useState<SearchMode>('auto')
+  // Default to substring — semantic search over a 1M-row vector store with
+  // a selective bucket filter has highly variable cold-cache latency on
+  // pgvector + HNSW, and the most common drill-panel question ("filter
+  // these rows by name/brand/etc.") is exactly what substring nails. Users
+  // can still pick Semantic from the mode pills when they want it.
+  const [searchMode, setSearchMode] = useState<SearchMode>('simple')
 
   // ── Sort state. Default null = server-default (PK asc).
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null)
