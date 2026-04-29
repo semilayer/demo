@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ANALYZE_URL,
   API_KEY,
@@ -732,6 +732,41 @@ const SORT_COLUMNS: Array<{ id: SortKey; label: string; align?: 'right' }> = [
   { id: 'inventory', label: 'Stock', align: 'right' },
 ]
 
+/**
+ * Wrap every case-insensitive match of `query` inside `text` with a `<mark>`.
+ * Matches every occurrence (not just the first) so users see "tomato" lit
+ * up everywhere it appears in name + description.
+ *
+ * Returns the original string when there's no query — keeps the React tree
+ * cheap on the common no-search drill view. Escapes regex metacharacters in
+ * the query so user input like `(Cento)` doesn't blow up the matcher.
+ */
+function highlightAll(text: string | null | undefined, query: string): React.ReactNode {
+  if (!text) return text ?? null
+  const q = query.trim()
+  if (!q) return text
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(escaped, 'gi')
+  const parts: React.ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  let i = 0
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    parts.push(
+      <mark key={`m-${i}`} className="hl">
+        {m[0]}
+      </mark>,
+    )
+    last = m.index + m[0].length
+    i += 1
+    // Safety against zero-width matches if escaping ever fails.
+    if (m.index === re.lastIndex) re.lastIndex += 1
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts.length > 0 ? <>{parts}</> : text
+}
+
 function DrillPanel({ drill, onClose }: DrillPanelProps) {
   const [data, setData] = useState<DrillData>(EMPTY_DRILL_DATA)
 
@@ -1077,7 +1112,12 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
             <div ref={listRef} className="drill-grid" role="rowgroup">
               {data.rows.map((r) => (
                 <div key={r.id} className="drill-row" role="row">
-                  <div className="cell name">{r.name}</div>
+                  <div className="cell name">
+                    <div className="cell-title">{highlightAll(r.name, search)}</div>
+                    {r.description ? (
+                      <div className="cell-desc">{highlightAll(r.description, search)}</div>
+                    ) : null}
+                  </div>
                   <div className="cell brand">{r.brand ?? '—'}</div>
                   <div className="cell category">{r.category ?? '—'}</div>
                   <div className="cell price r mono">
@@ -1346,7 +1386,7 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
         }
         .drill-row {
           display: grid;
-          grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) 5rem 4rem;
+          grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1fr) 5rem 4rem;
           gap: 0.5rem;
           padding: 0.55rem 0.7rem;
           background: var(--panel-2);
@@ -1364,6 +1404,28 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
         .cell.name {
           color: var(--text);
           font-weight: 500;
+          white-space: normal;
+          min-width: 0;
+        }
+        .cell-title {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .cell-desc {
+          margin-top: 0.1rem;
+          font-size: 0.74rem;
+          font-weight: 400;
+          color: var(--text-fade);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .hl {
+          background: rgba(217, 178, 92, 0.22);
+          color: var(--gold);
+          padding: 0 1px;
+          border-radius: 2px;
         }
         .cell.r {
           text-align: right;
