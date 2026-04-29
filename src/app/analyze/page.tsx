@@ -48,7 +48,17 @@ interface AnalysisSpec {
   toRow: (b: AnalyzeBucket) => { label: string; value: number }
   /** Friendly label for the bottom drill-down panel. */
   rowsCol: string
+  /**
+   * One-line summary of a bucket's measures, surfaced in the drill-panel
+   * subtitle so the user can see (e.g.) the totalStock that fed the
+   * treemap tile alongside the matching-row count. Without it, drilling
+   * a sum-measure bucket looks like a count clamp because the row total
+   * (38,589 products) doesn't match the chart's tooltip (9.6M units).
+   */
+  formatMeasures: (b: AnalyzeBucket) => string
 }
+
+const fmt = (n: number) => n.toLocaleString()
 
 const ANALYSES: AnalysisSpec[] = [
   {
@@ -61,6 +71,7 @@ const ANALYSES: AnalysisSpec[] = [
       value: b.measures.products ?? 0,
     }),
     rowsCol: 'category',
+    formatMeasures: (b) => `${fmt(b.measures.products ?? 0)} products`,
   },
   {
     name: 'priceDistribution',
@@ -76,6 +87,7 @@ const ANALYSES: AnalysisSpec[] = [
       return { label, value: b.measures.products ?? 0 }
     },
     rowsCol: 'price_cents',
+    formatMeasures: (b) => `${fmt(b.measures.products ?? 0)} products`,
   },
   {
     name: 'topBrands',
@@ -87,6 +99,7 @@ const ANALYSES: AnalysisSpec[] = [
       value: b.measures.products ?? 0,
     }),
     rowsCol: 'brand',
+    formatMeasures: (b) => `${fmt(b.measures.products ?? 0)} products`,
   },
   {
     name: 'inventoryByCategory',
@@ -98,6 +111,8 @@ const ANALYSES: AnalysisSpec[] = [
       value: b.measures.totalStock ?? 0,
     }),
     rowsCol: 'category',
+    formatMeasures: (b) =>
+      `${fmt(b.measures.totalStock ?? 0)} units in stock · avg ${fmt(Math.round(b.measures.avgStock ?? 0))}/SKU`,
   },
 ]
 
@@ -124,6 +139,13 @@ interface DrillSelection {
   spec: AnalysisSpec
   bucketKey: string
   bucketLabel: string
+  /**
+   * Pre-formatted measure summary for the bucket (e.g. "9,675,767 units in
+   * stock · avg 250/SKU"). Without this, the drill subtitle would only
+   * show the matching-row count, which doesn't match what the chart's
+   * tooltip displayed for sum measures and looks like a count clamp.
+   */
+  bucketMeasures: string
 }
 
 export default function AnalyzePage() {
@@ -211,6 +233,7 @@ export default function AnalyzePage() {
                 spec,
                 bucketKey: bucket.bucketKey,
                 bucketLabel: spec.toRow(bucket).label,
+                bucketMeasures: spec.formatMeasures(bucket),
               })
             }
           />
@@ -1017,10 +1040,16 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
             {drill.spec.title} → <span className="grad">{drill.bucketLabel}</span>
           </h3>
           <p className="drill-sub">
-            Drill-down replays the predicate that produced this bucket — same RBAC, same
-            mapping.
-            {data.total ? ` ${data.total.toLocaleString()} matching rows` : ''}
-            {data.loading ? ' · loading' : ''}
+            <span className="drill-measures">{drill.bucketMeasures}</span>
+            <span className="drill-divider"> · </span>
+            <span>
+              {data.total ? `${data.total.toLocaleString()} matching rows` : 'loading rows'}
+              {data.loading ? ' …' : ''}
+            </span>
+          </p>
+          <p className="drill-sub drill-sub-faint">
+            Drill-down replays the predicate that produced this bucket — same RBAC,
+            same mapping.
           </p>
         </div>
         <div className="drill-head-actions">
@@ -1190,6 +1219,20 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
           margin: 0.3rem 0 0;
           font-size: 0.82rem;
           color: var(--text-dim);
+        }
+        .drill-measures {
+          color: var(--gold);
+          font-family: var(--mono);
+          font-size: 0.78rem;
+          letter-spacing: 0.01em;
+        }
+        .drill-divider {
+          color: var(--text-fade);
+        }
+        .drill-sub-faint {
+          color: var(--text-fade);
+          font-size: 0.78rem;
+          margin-top: 0.2rem;
         }
         .drill-export {
           position: relative;
