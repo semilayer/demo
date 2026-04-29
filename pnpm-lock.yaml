@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@semilayer/charts':
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: ^0.1.6
+        version: 0.1.6
       '@semilayer/client':
         specifier: ^1.8.1
         version: 1.8.1
@@ -344,17 +344,23 @@ packages:
   '@rushstack/eslint-patch@1.16.1':
     resolution: {integrity: sha512-TvZbIpeKqGQQ7X0zSCvPH9riMSFQFSggnfBjFZ1mEoILW+UuXCKwOoPcgjMwiUtRqFZ8jWhPJc4um14vC6I4ag==}
 
-  '@semilayer/charts@0.1.2':
-    resolution: {integrity: sha512-NuJOzG4DClrbBmGEcjcM+azjjCsTFH0EYke2GPxf41CRWMfa5lHKYuKMDEwGLQK6mGWvdHEJeVnTeUfpa98JHg==}
+  '@semilayer/charts@0.1.6':
+    resolution: {integrity: sha512-Y4EGOKlMVwNFZw+z0v12e8joWiouqjLcjuQdQVQ1vc5xH1VZYPu8E70P/MvScgyyEsRdsMVKBf0PTxspFxjLng==}
 
   '@semilayer/client@1.8.1':
     resolution: {integrity: sha512-CpxM6SHapxRi0ttwKPin2k/Bu6R29ZY2q6Tu8aNUIWcjBecEMsyxP4hP+KOVjLv2NhsnfH00t+uEEU0OLxCo4Q==}
 
+  '@semilayer/client@1.9.1':
+    resolution: {integrity: sha512-ekoYq9vIZpUejDJDqLpUsxCpAYmUrsfeW5uVl8H3cZSxcqSE+x+PxdgHUItEOV/j8o2vjbG8B4LWLjOI/VPyLw==}
+
   '@semilayer/core@0.1.26':
     resolution: {integrity: sha512-/u1qiaDtofW0cYl7qqxe+/9nHr4x954Ys86Zrgunj9ibJcZTp6NUWMUBioT7EwcX/9oBIxHvWE8I6FF4cr82ww==}
 
-  '@semilayer/headless@0.1.2':
-    resolution: {integrity: sha512-wl732HOQ3r3Riky1x2Vd2Qr6C1nksyn5E0Kxs1vIcQu+JyoIj8QOd5OCQFxZeCbDaOZk6wDGI+HiuHfBrtR1sw==}
+  '@semilayer/core@0.1.29':
+    resolution: {integrity: sha512-6XthMsThpbr8C5i4u7j8jl+CNCNjpyl3LPXX+bRBkrClyB8s+w2eIbFHoeJVNFPaVqovIOz8oHO+G9+cUJiiIw==}
+
+  '@semilayer/headless@0.1.5':
+    resolution: {integrity: sha512-MUuE7XZSiFsyLe8o+tRFuYpzM5UU8SvLr+H4l6rF9vMzIxe22YLVlwrYcbLLpY6YceFwZx6vyy3/u/xo8Rqd4g==}
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -1839,20 +1845,26 @@ snapshots:
 
   '@rushstack/eslint-patch@1.16.1': {}
 
-  '@semilayer/charts@0.1.2':
+  '@semilayer/charts@0.1.6':
     dependencies:
-      '@semilayer/client': 1.8.1
-      '@semilayer/headless': 0.1.2
+      '@semilayer/client': 1.9.1
+      '@semilayer/headless': 0.1.5
 
   '@semilayer/client@1.8.1':
     dependencies:
       '@semilayer/core': 0.1.26
 
+  '@semilayer/client@1.9.1':
+    dependencies:
+      '@semilayer/core': 0.1.29
+
   '@semilayer/core@0.1.26': {}
 
-  '@semilayer/headless@0.1.2':
+  '@semilayer/core@0.1.29': {}
+
+  '@semilayer/headless@0.1.5':
     dependencies:
-      '@semilayer/client': 1.8.1
+      '@semilayer/client': 1.9.1
 
   '@swc/helpers@0.5.15':
     dependencies:

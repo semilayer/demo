@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@semilayer/charts": "^0.1.2",
+    "@semilayer/charts": "^0.1.6",
     "@semilayer/client": "^1.8.1",
     "@semilayer/core": "^0.1.26",
     "next": "^15.3.0",
