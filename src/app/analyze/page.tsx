@@ -32,6 +32,11 @@ import {
  * deps). The demo stays SDK-free — same posture as Search/Query/
  * Similar/Feeds. Only difference: each tile mounts a chart instead
  * of rendering a list.
+ *
+ * The drill-down panel below the charts ships search inside the
+ * bucket (auto/semantic/simple), column-header sort, and a
+ * streaming NDJSON/CSV export — all flowing through the same
+ * /v1/analyze/.../rows + .../rows/export endpoints.
  * ───────────────────────────────────────────────────────────── */
 
 interface AnalysisSpec {
@@ -610,8 +615,8 @@ function HintBanner() {
         </svg>
       </div>
       <div className="hint-text">
-        <strong>Try clicking any chart segment above</strong>
-        <span className="hint-sub">drill into the rows that built it</span>
+        <strong>Try clicking a chart segment above</strong>
+        <span className="hint-sub">drill, search inside, sort, export</span>
       </div>
 
       <style jsx>{`
@@ -685,6 +690,11 @@ interface DrillPanelProps {
 
 const PAGE_LIMIT = 25
 
+type SortDir = 'asc' | 'desc'
+type SortKey = 'name' | 'brand' | 'category' | 'price_cents' | 'inventory'
+type SearchMode = 'auto' | 'semantic' | 'simple'
+type ExportFormat = 'ndjson' | 'csv'
+
 interface DrillData {
   rows: FoodRow[]
   cursor: string | null
@@ -693,6 +703,8 @@ interface DrillData {
   loading: boolean
   loadingMore: boolean
   error: string | null
+  /** Echoed by the server — the concrete mode the engine ran. */
+  searchModeResolved: string | null
 }
 
 const EMPTY_DRILL_DATA: DrillData = {
@@ -703,26 +715,90 @@ const EMPTY_DRILL_DATA: DrillData = {
   loading: true,
   loadingMore: false,
   error: null,
+  searchModeResolved: null,
 }
+
+const SEARCH_MODES: Array<{ id: SearchMode; label: string }> = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'semantic', label: 'Semantic' },
+  { id: 'simple', label: 'Substring' },
+]
+
+const SORT_COLUMNS: Array<{ id: SortKey; label: string; align?: 'right' }> = [
+  { id: 'name', label: 'Name' },
+  { id: 'brand', label: 'Brand' },
+  { id: 'category', label: 'Category' },
+  { id: 'price_cents', label: 'Price', align: 'right' },
+  { id: 'inventory', label: 'Stock', align: 'right' },
+]
 
 function DrillPanel({ drill, onClose }: DrillPanelProps) {
   const [data, setData] = useState<DrillData>(EMPTY_DRILL_DATA)
-  // dataRef mirrors `data` so fetchMore can read the latest cursor /
-  // hasMore without needing them in its dep array — keeps the callback
-  // stable so the IO effect doesn't re-attach on every state churn.
+
+  // ── Search state. `searchInput` is what the user is typing; `search` is
+  // the debounced value that actually hits the API. 250ms is short enough
+  // that the demo feels instant but long enough to skip the noise of every
+  // keystroke roundtripping to Postgres.
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [searchMode, setSearchMode] = useState<SearchMode>('auto')
+
+  // ── Sort state. Default null = server-default (PK asc).
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null)
+
+  // ── Export state. Drives the inline progress label + truncation note.
+  const [exportState, setExportState] = useState<{
+    running: boolean
+    rowsExported: number
+    truncated: boolean
+    error: string | null
+  }>({ running: false, rowsExported: 0, truncated: false, error: null })
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+
+  // dataRef + listRef + sentinelRef + inFlightRef per the original pattern —
+  // see the surrounding comments below for what each one guards.
   const dataRef = useRef(data)
   useEffect(() => {
     dataRef.current = data
   }, [data])
-  const listRef = useRef<HTMLUListElement | null>(null)
-  const sentinelRef = useRef<HTMLLIElement | null>(null)
-  // Single source of truth for "a paging request is in flight". Set
-  // synchronously before kicking off fetch, cleared in finally. Guards
-  // against double-fires from StrictMode and from IO observer re-attach
-  // when state churns mid-page.
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const inFlightRef = useRef(false)
 
-  // Reset + first-page fetch on every bucketKey change. Also runs on mount.
+  // Debounce the search input → search query that actually hits the API.
+  useEffect(() => {
+    const handle = setTimeout(() => setSearch(searchInput.trim()), 250)
+    return () => clearTimeout(handle)
+  }, [searchInput])
+
+  // Stable serialised form of the body the API call assembles. Used as a
+  // dependency so the reset/refetch effect runs exactly when something
+  // visible to the user actually changed.
+  const orderByJson = useMemo(
+    () => (sort ? JSON.stringify({ field: sort.key, dir: sort.dir }) : ''),
+    [sort],
+  )
+
+  const buildBody = useCallback(
+    (extras: Record<string, unknown>) => {
+      const body: Record<string, unknown> = {
+        bucketKey: drill.bucketKey,
+        ...extras,
+      }
+      if (search) {
+        body.search = search
+        body.searchMode = searchMode
+      }
+      if (sort) {
+        body.orderBy = { field: sort.key, dir: sort.dir }
+      }
+      return body
+    },
+    [drill.bucketKey, search, searchMode, sort],
+  )
+
+  // Reset + first-page fetch on every (bucketKey | search | searchMode | sort)
+  // change. Also runs on mount.
   useEffect(() => {
     let cancelled = false
     inFlightRef.current = true
@@ -734,14 +810,16 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${API_KEY}`,
       },
-      body: JSON.stringify({ bucketKey: drill.bucketKey, limit: PAGE_LIMIT }),
+      body: JSON.stringify(buildBody({ limit: PAGE_LIMIT })),
     })
       .then(async (res) => {
         if (!res.ok) {
           const text = await res.text()
           throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`)
         }
-        return (await res.json()) as AnalyzeRowsPage
+        return (await res.json()) as AnalyzeRowsPage & {
+          meta?: { searchMode?: string }
+        }
       })
       .then((page) => {
         if (cancelled) return
@@ -754,6 +832,7 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
           loading: false,
           loadingMore: false,
           error: null,
+          searchModeResolved: page.meta?.searchMode ?? null,
         })
       })
       .catch((err: unknown) => {
@@ -771,7 +850,7 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
     return () => {
       cancelled = true
     }
-  }, [drill.bucketKey, drill.spec.name])
+  }, [drill.bucketKey, drill.spec.name, search, searchMode, orderByJson, buildBody])
 
   // Append the next page. The synchronous in-flight guard + cursor capture
   // happen BEFORE any state setter so React (incl. StrictMode) cannot
@@ -792,11 +871,7 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${API_KEY}`,
           },
-          body: JSON.stringify({
-            bucketKey: drill.bucketKey,
-            limit: PAGE_LIMIT,
-            cursor: cursorAtRequest,
-          }),
+          body: JSON.stringify(buildBody({ limit: PAGE_LIMIT, cursor: cursorAtRequest })),
         })
         if (!res.ok) {
           const text = await res.text()
@@ -829,7 +904,7 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
         inFlightRef.current = false
       }
     })()
-  }, [drill.bucketKey, drill.spec.name])
+  }, [drill.spec.name, buildBody])
 
   // Observe the sentinel — when it scrolls into view inside the list's
   // internal scroll container, trigger fetchMore. Scoping `root` to the
@@ -850,10 +925,58 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
     return () => observer.disconnect()
   }, [data.hasMore, data.loading, data.error, fetchMore])
 
+  const onSortClick = useCallback((key: SortKey) => {
+    setSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' }
+      if (prev.dir === 'asc') return { key, dir: 'desc' }
+      return null // third click clears sort
+    })
+  }, [])
+
+  const startExport = useCallback(
+    async (format: ExportFormat) => {
+      setExportMenuOpen(false)
+      setExportState({ running: true, rowsExported: 0, truncated: false, error: null })
+      try {
+        const result = await streamingDownload({
+          url: `${ANALYZE_URL}/${drill.spec.name}/rows/export`,
+          body: buildBody({ format }),
+          format,
+          filenameBase: `${drill.spec.name}.${slugify(drill.bucketLabel)}`,
+          authHeader: `Bearer ${API_KEY}`,
+          onProgress: (rows) =>
+            setExportState((prev) => (prev.running ? { ...prev, rowsExported: rows } : prev)),
+        })
+        setExportState({
+          running: false,
+          rowsExported: result.rowsExported,
+          truncated: result.truncated,
+          error: null,
+        })
+      } catch (err) {
+        setExportState({
+          running: false,
+          rowsExported: 0,
+          truncated: false,
+          error: err instanceof Error ? err.message : 'export failed',
+        })
+      }
+    },
+    [drill.bucketLabel, drill.spec.name, buildBody],
+  )
+
+  // Close the export menu on outside click.
+  useEffect(() => {
+    if (!exportMenuOpen) return
+    const onDocClick = () => setExportMenuOpen(false)
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [exportMenuOpen])
+
   return (
     <section className="drill">
       <header className="drill-head">
-        <div>
+        <div className="drill-head-text">
           <div className="drill-eyebrow">POST /v1/analyze/.../rows</div>
           <h3 className="drill-title">
             {drill.spec.title} → <span className="grad">{drill.bucketLabel}</span>
@@ -865,39 +988,118 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
             {data.loading ? ' · loading' : ''}
           </p>
         </div>
-        <button className="drill-close" onClick={onClose} type="button">
-          ✕
-        </button>
+        <div className="drill-head-actions">
+          <div className="drill-export" onMouseDown={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="export-btn"
+              disabled={exportState.running}
+              onClick={() => setExportMenuOpen((v) => !v)}
+            >
+              {exportState.running ? `Exporting… ${exportState.rowsExported.toLocaleString()}` : 'Export ▾'}
+            </button>
+            {exportMenuOpen ? (
+              <div className="export-menu">
+                <button type="button" onClick={() => startExport('ndjson')}>
+                  NDJSON
+                </button>
+                <button type="button" onClick={() => startExport('csv')}>
+                  CSV
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <button className="drill-close" onClick={onClose} type="button" aria-label="Close drill panel">
+            ✕
+          </button>
+        </div>
       </header>
+
+      <div className="drill-search">
+        <input
+          type="search"
+          placeholder="Search inside this bucket…"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <div className="search-modes">
+          {SEARCH_MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className={`mode-pill ${searchMode === m.id ? 'on' : ''}`}
+              onClick={() => setSearchMode(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
+          {data.searchModeResolved && search ? (
+            <span className="search-resolved">
+              ran as <code>{data.searchModeResolved}</code>
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      {exportState.error ? (
+        <div className="drill-toast err">Export failed: {exportState.error}</div>
+      ) : !exportState.running && exportState.rowsExported > 0 ? (
+        <div className={`drill-toast ${exportState.truncated ? 'warn' : 'ok'}`}>
+          Exported {exportState.rowsExported.toLocaleString()} rows
+          {exportState.truncated ? ' — truncated at the tier cap.' : '.'}
+        </div>
+      ) : null}
 
       {data.error ? (
         <div className="drill-err">{data.error}</div>
-      ) : data.rows.length > 0 ? (
-        <ul ref={listRef} className="drill-list">
-          {data.rows.map((r) => (
-            <li key={r.id} className="drill-row">
-              <div className="drill-row-name">{r.name}</div>
-              <div className="drill-row-meta">
-                <span>{r.brand ?? '—'}</span>
-                <span>·</span>
-                <span>{r.category ?? '—'}</span>
-                <span>·</span>
-                <span className="mono">${(r.price_cents ?? 0) / 100}</span>
-                <span>·</span>
-                <span className="mono">stock {r.inventory ?? 0}</span>
-              </div>
-            </li>
-          ))}
-          {data.hasMore ? (
-            <li ref={sentinelRef} className="drill-sentinel">
-              {data.loadingMore ? 'Loading more…' : ''}
-            </li>
-          ) : (
-            <li className="drill-end">— end of rows —</li>
+      ) : (
+        <>
+          <div className="sort-header" role="row">
+            {SORT_COLUMNS.map((col) => {
+              const active = sort?.key === col.id
+              const dirChar = active ? (sort?.dir === 'asc' ? '↑' : '↓') : ''
+              return (
+                <button
+                  key={col.id}
+                  type="button"
+                  role="columnheader"
+                  className={`sort-cell ${col.id} ${active ? 'on' : ''} ${col.align === 'right' ? 'r' : ''}`}
+                  onClick={() => onSortClick(col.id)}
+                >
+                  {col.label} {dirChar}
+                </button>
+              )
+            })}
+          </div>
+          {data.rows.length > 0 ? (
+            <div ref={listRef} className="drill-grid" role="rowgroup">
+              {data.rows.map((r) => (
+                <div key={r.id} className="drill-row" role="row">
+                  <div className="cell name">{r.name}</div>
+                  <div className="cell brand">{r.brand ?? '—'}</div>
+                  <div className="cell category">{r.category ?? '—'}</div>
+                  <div className="cell price r mono">
+                    ${(r.price_cents ?? 0) / 100}
+                  </div>
+                  <div className="cell stock r mono">{r.inventory ?? 0}</div>
+                </div>
+              ))}
+              {data.hasMore ? (
+                <div ref={sentinelRef} className="drill-sentinel" role="row">
+                  {data.loadingMore ? 'Loading more…' : ''}
+                </div>
+              ) : (
+                <div className="drill-end" role="row">
+                  — end of rows —
+                </div>
+              )}
+            </div>
+          ) : data.loading ? null : (
+            <div className="drill-empty">No rows match.</div>
           )}
-        </ul>
-      ) : data.loading ? null : (
-        <div className="drill-empty">No rows.</div>
+        </>
       )}
 
       <style jsx>{`
@@ -914,6 +1116,15 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
           align-items: flex-start;
           gap: 1rem;
           margin-bottom: 0.85rem;
+        }
+        .drill-head-text {
+          min-width: 0;
+        }
+        .drill-head-actions {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          flex-shrink: 0;
         }
         .drill-eyebrow {
           font-family: var(--mono);
@@ -940,6 +1151,58 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
           font-size: 0.82rem;
           color: var(--text-dim);
         }
+        .drill-export {
+          position: relative;
+        }
+        .export-btn {
+          background: var(--panel-2);
+          border: 1px solid var(--border);
+          color: var(--text);
+          padding: 0.4rem 0.75rem;
+          border-radius: 8px;
+          font-size: 0.78rem;
+          font-family: var(--mono);
+          letter-spacing: 0.04em;
+          cursor: pointer;
+          transition: border-color 140ms, color 140ms;
+        }
+        .export-btn:hover:not(:disabled) {
+          border-color: var(--purple);
+          color: white;
+        }
+        .export-btn:disabled {
+          opacity: 0.7;
+          cursor: progress;
+        }
+        .export-menu {
+          position: absolute;
+          right: 0;
+          top: calc(100% + 4px);
+          background: var(--panel);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          padding: 0.25rem;
+          display: flex;
+          flex-direction: column;
+          min-width: 110px;
+          box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+          z-index: 5;
+        }
+        .export-menu button {
+          background: transparent;
+          border: 0;
+          color: var(--text);
+          font-size: 0.82rem;
+          padding: 0.45rem 0.6rem;
+          border-radius: 6px;
+          text-align: left;
+          font-family: var(--mono);
+          cursor: pointer;
+        }
+        .export-menu button:hover {
+          background: var(--panel-2);
+          color: white;
+        }
         .drill-close {
           background: transparent;
           border: 1px solid var(--border);
@@ -954,35 +1217,156 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
           color: var(--text);
           border-color: var(--purple);
         }
-        .drill-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
+        .drill-search {
           display: flex;
           flex-direction: column;
-          gap: 0.4rem;
+          gap: 0.5rem;
+          margin-bottom: 0.85rem;
+        }
+        .drill-search input {
+          width: 100%;
+          padding: 0.5rem 0.75rem;
+          font-size: 0.88rem;
+          background: var(--panel-2);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          color: var(--text);
+          font-family: inherit;
+          transition: border-color 140ms;
+        }
+        .drill-search input:focus {
+          outline: none;
+          border-color: var(--purple);
+        }
+        .search-modes {
+          display: flex;
+          align-items: center;
+          gap: 0.3rem;
+          flex-wrap: wrap;
+        }
+        .mode-pill {
+          font-family: var(--mono);
+          font-size: 0.68rem;
+          padding: 0.25rem 0.6rem;
+          border-radius: 999px;
+          background: var(--panel-2);
+          border: 1px solid var(--border);
+          color: var(--text-dim);
+          letter-spacing: 0.04em;
+          cursor: pointer;
+          transition: border-color 140ms, color 140ms, background 140ms;
+        }
+        .mode-pill:hover {
+          color: var(--text);
+          border-color: rgba(139, 92, 246, 0.5);
+        }
+        .mode-pill.on {
+          background: rgba(139, 92, 246, 0.18);
+          border-color: rgba(139, 92, 246, 0.55);
+          color: white;
+        }
+        .search-resolved {
+          font-family: var(--mono);
+          font-size: 0.68rem;
+          color: var(--text-fade);
+          margin-left: 0.4rem;
+        }
+        .search-resolved code {
+          color: var(--gold);
+          background: rgba(255, 209, 102, 0.08);
+          padding: 0.1em 0.35em;
+          border-radius: 4px;
+        }
+        .drill-toast {
+          padding: 0.45rem 0.65rem;
+          border-radius: 6px;
+          font-size: 0.78rem;
+          margin-bottom: 0.6rem;
+          font-family: var(--mono);
+          letter-spacing: 0.02em;
+        }
+        .drill-toast.ok {
+          color: #34d399;
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .drill-toast.warn {
+          color: var(--gold);
+          background: rgba(255, 209, 102, 0.08);
+          border: 1px solid rgba(255, 209, 102, 0.3);
+        }
+        .drill-toast.err {
+          color: var(--pink);
+          background: rgba(244, 114, 182, 0.08);
+          border: 1px solid rgba(244, 114, 182, 0.3);
+        }
+
+        /* ── 4-column grid ── */
+        .sort-header {
+          display: grid;
+          grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) 5rem 4rem;
+          gap: 0.5rem;
+          padding: 0.4rem 0.7rem;
+          border-bottom: 1px solid var(--border);
+          margin-bottom: 0.4rem;
+          position: sticky;
+          top: 0;
+          background: var(--panel);
+          z-index: 1;
+        }
+        .sort-cell {
+          background: transparent;
+          border: 0;
+          color: var(--text-dim);
+          font-size: 0.7rem;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          font-weight: 600;
+          text-align: left;
+          padding: 0.2rem 0;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: color 140ms;
+        }
+        .sort-cell.r {
+          text-align: right;
+        }
+        .sort-cell:hover {
+          color: var(--text);
+        }
+        .sort-cell.on {
+          color: var(--gold);
+        }
+        .drill-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
           max-height: 60vh;
           overflow-y: auto;
         }
         .drill-row {
+          display: grid;
+          grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) 5rem 4rem;
+          gap: 0.5rem;
           padding: 0.55rem 0.7rem;
           background: var(--panel-2);
           border: 1px solid var(--border);
           border-radius: 8px;
+          font-size: 0.85rem;
+          align-items: center;
         }
-        .drill-row-name {
-          font-size: 0.88rem;
+        .cell {
+          color: var(--text-dim);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .cell.name {
           color: var(--text);
           font-weight: 500;
-          margin-bottom: 0.2rem;
         }
-        .drill-row-meta {
-          display: flex;
-          gap: 0.45rem;
-          font-size: 0.78rem;
-          color: var(--text-dim);
-          flex-wrap: wrap;
-          align-items: center;
+        .cell.r {
+          text-align: right;
         }
         .mono {
           font-family: var(--mono);
@@ -1017,7 +1401,211 @@ function DrillPanel({ drill, onClose }: DrillPanelProps) {
           color: var(--text-fade);
           letter-spacing: 0.04em;
         }
+
+        /* ── Mobile fallback: collapse to stacked rows + Sort menu ── */
+        @media (max-width: 640px) {
+          .sort-header {
+            display: none;
+          }
+          .drill-row {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.2rem;
+          }
+          .cell.r {
+            text-align: left;
+          }
+        }
       `}</style>
     </section>
   )
+}
+
+/* ── Streaming download helper ─────────────────────────────────
+ *
+ * Inline mini-version of @semilayer/console's streaming-export.ts.
+ * Demo lives outside the monorepo, so we don't share code with
+ * Console — we re-derive the small bits we need: drain the stream
+ * with a Reader, count rows by quote-aware newlines so progress
+ * matches reality, read the trailer where the runtime exposes it,
+ * fall back to "rows hit the cap" when it doesn't.
+ *
+ * Aborts aren't surfaced by the demo (no cancel button on this
+ * surface — the Console covers that path); a fresh export request
+ * still wins because the previous fetch's `setExportState` only
+ * fires after `await result`, and `setExportState({running:true})`
+ * resets first.
+ * ───────────────────────────────────────────────────────────── */
+
+interface StreamingDownloadOpts {
+  url: string
+  body: Record<string, unknown>
+  format: ExportFormat
+  filenameBase: string
+  authHeader: string
+  onProgress?: (rows: number) => void
+}
+
+async function streamingDownload(opts: StreamingDownloadOpts): Promise<{
+  rowsExported: number
+  truncated: boolean
+}> {
+  const res = await fetch(opts.url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: opts.authHeader,
+    },
+    body: JSON.stringify(opts.body),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`)
+  }
+
+  const maxRowsHeader = res.headers.get('x-semilayer-export-max-rows')
+  const maxRows = maxRowsHeader ? Number(maxRowsHeader) : null
+
+  if (!res.body) {
+    const blob = await res.blob()
+    saveBlob(blob, `${opts.filenameBase}.${opts.format}`)
+    return { rowsExported: 0, truncated: false }
+  }
+
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let rowCount = 0
+  const counter = makeRowCounter(opts.format)
+  const decoder = new TextDecoder('utf-8')
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (value) {
+      chunks.push(value)
+      rowCount += counter.feed(decoder.decode(value, { stream: true }))
+      opts.onProgress?.(rowCount)
+    }
+    if (done) {
+      const tail = decoder.decode()
+      if (tail.length > 0) rowCount += counter.feed(tail)
+      rowCount += counter.flush()
+      break
+    }
+  }
+
+  let truncated = false
+  type ResponseWithTrailer = Response & { trailer?: Promise<Headers> }
+  const r = res as unknown as ResponseWithTrailer
+  if (r.trailer) {
+    try {
+      const trailers = await r.trailer
+      if (trailers.get('x-semilayer-export-truncated') === 'true') truncated = true
+    } catch {
+      // trailers are advisory
+    }
+  }
+  if (!truncated && maxRows !== null && rowCount >= maxRows) truncated = true
+
+  const blob = new Blob(chunks as BlobPart[], {
+    type: opts.format === 'csv' ? 'text/csv;charset=utf-8' : 'application/x-ndjson;charset=utf-8',
+  })
+  saveBlob(blob, `${opts.filenameBase}.${opts.format}`)
+  opts.onProgress?.(rowCount)
+  return { rowsExported: rowCount, truncated }
+}
+
+function saveBlob(blob: Blob, filename: string): void {
+  if (typeof window === 'undefined') return
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1_000)
+}
+
+interface RowCounter {
+  feed(chunk: string): number
+  flush(): number
+}
+
+/**
+ * Quote-aware row counter — same posture as the Console helper. CSV cells
+ * with embedded `\n` are RFC-4180-quoted, so naive `split('\n')` overcounts
+ * rows whenever data contains descriptions or addresses. NDJSON's escapes
+ * are JSON.stringify's responsibility so the in-quote branch never trips,
+ * and the same code path works for both formats.
+ */
+function makeRowCounter(format: ExportFormat): RowCounter {
+  let inQuote = false
+  let pendingChar = ''
+  let csvHeaderSeen = format !== 'csv'
+  let rowHasContent = false
+
+  function consumeRowEnd(): number {
+    if (!rowHasContent) return 0
+    rowHasContent = false
+    if (!csvHeaderSeen && format === 'csv') {
+      csvHeaderSeen = true
+      return 0
+    }
+    return 1
+  }
+
+  return {
+    feed(chunk: string): number {
+      if (chunk.length === 0) return 0
+      let added = 0
+      const text = pendingChar + chunk
+      pendingChar = ''
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i]!
+        if (format === 'csv' && ch === '"') {
+          if (inQuote) {
+            if (i + 1 >= text.length) {
+              pendingChar = ch
+              break
+            }
+            if (text[i + 1] === '"') {
+              i++
+              rowHasContent = true
+              continue
+            }
+            inQuote = false
+          } else {
+            inQuote = true
+          }
+          rowHasContent = true
+          continue
+        }
+        if ((ch === '\n' || ch === '\r') && !inQuote) {
+          if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') i++
+          added += consumeRowEnd()
+          continue
+        }
+        rowHasContent = true
+      }
+      return added
+    },
+    flush(): number {
+      if (pendingChar) {
+        if (pendingChar === '"' && inQuote) inQuote = false
+        rowHasContent = true
+        pendingChar = ''
+      }
+      return consumeRowEnd()
+    },
+  }
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40) || 'bucket'
 }
