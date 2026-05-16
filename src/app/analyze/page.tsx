@@ -392,6 +392,17 @@ interface ChartTileProps {
 function ChartTile({ spec, where, whereKey, onDrill }: ChartTileProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<ChartInstance | null>(null)
+  // The chart's bucket-click handler is registered exactly once (when the
+  // chart instance is first created), but the underlying buckets are swapped
+  // on every filter change via chartRef.current.update(). Resolve the click
+  // through refs so a click *after* a filter change finds the current
+  // bucketKey instead of searching the first fetch's stale closure (which
+  // would silently no-op the drill).
+  const bucketsRef = useRef<AnalyzeBucket[]>([])
+  const onDrillRef = useRef(onDrill)
+  useEffect(() => {
+    onDrillRef.current = onDrill
+  }, [onDrill])
   const [meta, setMeta] = useState<{ strategy: string; duration: number; rows: number } | null>(
     null,
   )
@@ -426,13 +437,21 @@ function ChartTile({ spec, where, whereKey, onDrill }: ChartTileProps) {
     setLoading(true)
     setError(null)
 
+    // `cache: 'no-cache'` is load-bearing — do NOT remove it as an
+    // "optimization". The signed bucketKey each bucket carries is baked into
+    // the server's cached/precompute-rollup AnalyzeResult envelope. The
+    // food_products demo data is static, so the rollup is never
+    // NOTIFY-invalidated and would serve an envelope whose bucketKeys were
+    // signed days ago and are long past their 24h TTL — every drill-down
+    // then 410s with `bucket_key_expired`. Bypassing the cache lookup forces
+    // a fresh recompute + freshly-signed bucketKeys on every page load.
     fetch(`${ANALYZE_URL}/${spec.name}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${API_KEY}`,
       },
-      body: JSON.stringify(where ? { where } : {}),
+      body: JSON.stringify({ cache: 'no-cache', ...(where ? { where } : {}) }),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -443,6 +462,11 @@ function ChartTile({ spec, where, whereKey, onDrill }: ChartTileProps) {
       })
       .then((data) => {
         if (cancelled) return
+
+        // Keep the click-resolution source of truth current (see bucketsRef
+        // comment above) — every refetch replaces it so post-filter clicks
+        // resolve against the buckets actually on screen.
+        bucketsRef.current = data.buckets
 
         // Reshape buckets into a tidy `(dim, value)` series for the chart.
         // The synthetic AnalyzeResult shape is what @semilayer/charts'
@@ -480,10 +504,11 @@ function ChartTile({ spec, where, whereKey, onDrill }: ChartTileProps) {
             encoding: { x: 'label', y: 'value' },
           })
           chartRef.current.onBucketClick((bk) => {
-            // The chart's bucketKey is the same string we attached above,
-            // so look the original AnalyzeBucket up directly.
-            const original = data.buckets.find((b) => b.bucketKey === bk)
-            if (original) onDrill(original)
+            // The chart's bucketKey is the same string we attached above.
+            // Resolve against the *current* buckets (refs), not this
+            // closure's `data`, so drilling works after a filter change.
+            const original = bucketsRef.current.find((b) => b.bucketKey === bk)
+            if (original) onDrillRef.current(original)
           })
         }
 
